@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { McpProcess } from "../mcp-process.js";
 import { Logger } from "../logger.js";
-import type { SkillDefinition } from "../config.js";
+import type { McpServerConfig } from "../config.js";
 
 // Mock @modelcontextprotocol/sdk
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => {
@@ -34,11 +34,11 @@ vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => {
   };
 });
 
-const testDefinition: SkillDefinition = {
-  id: "test-skill",
+const testDefinition: McpServerConfig = {
+  id: "test-integration",
   type: "mcp_server",
-  name: "Test Skill",
-  description: "A test skill",
+  name: "Test Integration",
+  description: "A test integration",
   command: "echo",
   args: ["test"],
   envVars: {},
@@ -98,9 +98,9 @@ describe("McpProcess", () => {
     );
   });
 
-  it("exposes skillId from definition", () => {
+  it("exposes integrationId from definition", () => {
     const process = new McpProcess(testDefinition, {}, logger);
-    expect(process.skillId).toBe("test-skill");
+    expect(process.integrationId).toBe("test-integration");
   });
 
   it("emits crash event when transport closes unexpectedly", async () => {

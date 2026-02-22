@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const GATEWAY_ERROR_CODES = [
-  "SKILL_NOT_FOUND",
+  "INTEGRATION_NOT_FOUND",
   "TOOL_NOT_FOUND",
   "EXECUTION_FAILED",
   "TIMEOUT",

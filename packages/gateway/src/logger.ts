@@ -31,7 +31,7 @@ export class Logger {
   }
 
   toolCall(params: {
-    skillId: string;
+    integrationId: string;
     toolName: string;
     requestId: string;
     durationMs: number;
@@ -39,7 +39,7 @@ export class Logger {
     error?: string;
   }): void {
     this.log(params.success ? "info" : "error", "tool_call", {
-      skillId: params.skillId,
+      integrationId: params.integrationId,
       toolName: params.toolName,
       requestId: params.requestId,
       durationMs: params.durationMs,

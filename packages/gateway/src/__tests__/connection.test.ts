@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GatewayConnection } from "../connection.js";
 import type { GatewayConfig } from "../config.js";
-import { SkillRuntime } from "../skill-runtime.js";
+import { ToolRuntime } from "../tool-runtime.js";
 import { EventEmitter } from "node:events";
 
 // Mock ws
@@ -36,10 +36,10 @@ vi.mock("ws", () => {
   return { default: ctor };
 });
 
-// Mock SkillRuntime
-vi.mock("../skill-runtime.js", () => {
+// Mock ToolRuntime
+vi.mock("../tool-runtime.js", () => {
   return {
-    SkillRuntime: vi.fn().mockImplementation(() => ({
+    ToolRuntime: vi.fn().mockImplementation(() => ({
       getRegistration: vi.fn().mockResolvedValue([
         {
           type: "mcp_server",
@@ -59,10 +59,10 @@ vi.mock("../skill-runtime.js", () => {
         content: [{ type: "text", text: "result" }],
       }),
     })),
-    SkillNotFoundError: class SkillNotFoundError extends Error {
+    IntegrationNotFoundError: class IntegrationNotFoundError extends Error {
       constructor(msg: string) {
         super(msg);
-        this.name = "SkillNotFoundError";
+        this.name = "IntegrationNotFoundError";
       }
     },
   };
@@ -73,10 +73,10 @@ let mockWsInstances: MockWebSocket[] = [];
 const config: GatewayConfig = {
   token: "gw_test123",
   url: "wss://localhost/v1",
-  skills: ["postgresql"],
+  integrations: ["postgresql"],
   logLevel: "error",
-  skillDefinitions: [],
-  skillEnvVars: new Map(),
+  mcpServers: [],
+  mcpEnvVars: new Map(),
 };
 
 describe("GatewayConnection", () => {
@@ -90,7 +90,7 @@ describe("GatewayConnection", () => {
   });
 
   it("completes full connection lifecycle", async () => {
-    const runtime = new SkillRuntime(config);
+    const runtime = new ToolRuntime(config);
     const conn = new GatewayConnection(config, runtime);
 
     const connectPromise = conn.connect();
@@ -118,12 +118,12 @@ describe("GatewayConnection", () => {
     expect(ws.sent).toHaveLength(2);
     const registerMsg = JSON.parse(ws.sent[1]);
     expect(registerMsg.type).toBe("register");
-    expect(registerMsg.skills).toHaveLength(1);
+    expect(registerMsg.integrations).toHaveLength(1);
 
     // Service responds with registered
     ws.emit("message", JSON.stringify({
       type: "registered",
-      skillCount: 1,
+      integrationCount: 1,
       toolCount: 1,
     }));
 
@@ -132,7 +132,7 @@ describe("GatewayConnection", () => {
   });
 
   it("handles auth error", async () => {
-    const runtime = new SkillRuntime(config);
+    const runtime = new ToolRuntime(config);
     const conn = new GatewayConnection(config, runtime);
 
     const connectPromise = conn.connect();
@@ -149,7 +149,7 @@ describe("GatewayConnection", () => {
   });
 
   it("responds to ping with pong", async () => {
-    const runtime = new SkillRuntime(config);
+    const runtime = new ToolRuntime(config);
     const conn = new GatewayConnection(config, runtime);
 
     const connectPromise = conn.connect();
@@ -165,7 +165,7 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     ws.emit("message", JSON.stringify({
       type: "registered",
-      skillCount: 1,
+      integrationCount: 1,
       toolCount: 1,
     }));
     await connectPromise;
@@ -182,7 +182,7 @@ describe("GatewayConnection", () => {
   });
 
   it("handles tool_call and sends tool_result", async () => {
-    const runtime = new SkillRuntime(config);
+    const runtime = new ToolRuntime(config);
     const conn = new GatewayConnection(config, runtime);
 
     const connectPromise = conn.connect();
@@ -198,7 +198,7 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     ws.emit("message", JSON.stringify({
       type: "registered",
-      skillCount: 1,
+      integrationCount: 1,
       toolCount: 1,
     }));
     await connectPromise;
@@ -207,7 +207,7 @@ describe("GatewayConnection", () => {
     ws.emit("message", JSON.stringify({
       type: "tool_call",
       requestId: "req_abc",
-      skillId: "postgresql",
+      integrationId: "postgresql",
       toolName: "query",
       arguments: { sql: "SELECT 1" },
     }));
@@ -225,7 +225,7 @@ describe("GatewayConnection", () => {
   });
 
   it("ignores invalid messages gracefully", async () => {
-    const runtime = new SkillRuntime(config);
+    const runtime = new ToolRuntime(config);
     const conn = new GatewayConnection(config, runtime);
 
     const connectPromise = conn.connect();
@@ -245,7 +245,7 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     ws.emit("message", JSON.stringify({
       type: "registered",
-      skillCount: 1,
+      integrationCount: 1,
       toolCount: 1,
     }));
 

@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import type { SkillDefinition } from "./config.js";
+import type { McpServerConfig } from "./config.js";
 import type { ToolDefinition, ToolResult, ContentBlock } from "@journal-edge/types";
 import { Logger } from "./logger.js";
 import { EventEmitter } from "node:events";
@@ -15,7 +15,7 @@ export class McpProcess extends EventEmitter<McpProcessEvents> {
   private running = false;
 
   constructor(
-    private definition: SkillDefinition,
+    private definition: McpServerConfig,
     private env: Record<string, string>,
     private logger: Logger
   ) {
@@ -23,7 +23,7 @@ export class McpProcess extends EventEmitter<McpProcessEvents> {
   }
 
   async start(): Promise<void> {
-    this.logger.info(`Starting MCP process for skill "${this.definition.id}"`, {
+    this.logger.info(`Starting MCP process for integration "${this.definition.id}"`, {
       command: this.definition.command,
       args: this.definition.args,
     });
@@ -43,7 +43,7 @@ export class McpProcess extends EventEmitter<McpProcessEvents> {
       if (this.running) {
         this.running = false;
         const err = new Error(
-          `MCP process for skill "${this.definition.id}" exited unexpectedly`
+          `MCP process for integration "${this.definition.id}" exited unexpectedly`
         );
         this.logger.error(err.message);
         this.emit("crash", err);
@@ -54,7 +54,7 @@ export class McpProcess extends EventEmitter<McpProcessEvents> {
     this.running = true;
 
     this.logger.info(
-      `MCP process for skill "${this.definition.id}" started successfully`
+      `MCP process for integration "${this.definition.id}" started successfully`
     );
   }
 
@@ -104,7 +104,7 @@ export class McpProcess extends EventEmitter<McpProcessEvents> {
     }
     this.client = null;
     this.logger.info(
-      `MCP process for skill "${this.definition.id}" stopped`
+      `MCP process for integration "${this.definition.id}" stopped`
     );
   }
 
@@ -112,7 +112,7 @@ export class McpProcess extends EventEmitter<McpProcessEvents> {
     return this.running;
   }
 
-  get skillId(): string {
+  get integrationId(): string {
     return this.definition.id;
   }
 }

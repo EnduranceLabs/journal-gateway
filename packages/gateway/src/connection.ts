@@ -6,7 +6,7 @@ import {
   type GatewayErrorCode,
 } from "@journal-edge/types";
 import type { GatewayConfig } from "./config.js";
-import { SkillRuntime, SkillNotFoundError } from "./skill-runtime.js";
+import { ToolRuntime, IntegrationNotFoundError } from "./tool-runtime.js";
 import { Logger } from "./logger.js";
 import { VERSION } from "./version.js";
 
@@ -28,7 +28,7 @@ export class GatewayConnection {
 
   constructor(
     private config: GatewayConfig,
-    private runtime: SkillRuntime
+    private runtime: ToolRuntime
   ) {
     this.logger = new Logger(config.logLevel);
   }
@@ -89,8 +89,8 @@ export class GatewayConnection {
               organizationName: msg.organizationName,
             });
 
-            const skills = await this.runtime.getRegistration();
-            this.send({ type: "register", skills });
+            const integrations = await this.runtime.getRegistration();
+            this.send({ type: "register", integrations });
 
             registerTimer = setTimeout(() => {
               if (!registered) {
@@ -115,8 +115,8 @@ export class GatewayConnection {
             if (registerTimer) clearTimeout(registerTimer);
             registered = true;
             this.reconnectDelay = RECONNECT_INITIAL_MS;
-            this.logger.info("Skills registered", {
-              skillCount: msg.skillCount,
+            this.logger.info("Integrations registered", {
+              integrationCount: msg.integrationCount,
               toolCount: msg.toolCount,
             });
             resolve();
@@ -124,7 +124,7 @@ export class GatewayConnection {
           }
 
           case "tool_call": {
-            this.handleToolCall(msg.requestId, msg.skillId, msg.toolName, msg.arguments);
+            this.handleToolCall(msg.requestId, msg.integrationId, msg.toolName, msg.arguments);
             break;
           }
 
@@ -154,7 +154,7 @@ export class GatewayConnection {
 
   private async handleToolCall(
     requestId: string,
-    skillId: string,
+    integrationId: string,
     toolName: string,
     args: Record<string, unknown>
   ): Promise<void> {
@@ -169,14 +169,14 @@ export class GatewayConnection {
 
     try {
       const result = await Promise.race([
-        this.runtime.callTool(skillId, toolName, args),
+        this.runtime.callTool(integrationId, toolName, args),
         timeout,
       ]);
 
       this.send({ type: "tool_result", requestId, result });
 
       this.logger.toolCall({
-        skillId,
+        integrationId,
         toolName,
         requestId,
         durationMs: Date.now() - start,
@@ -186,8 +186,8 @@ export class GatewayConnection {
       let code: GatewayErrorCode = "EXECUTION_FAILED";
       let message = err instanceof Error ? err.message : String(err);
 
-      if (err instanceof SkillNotFoundError) {
-        code = "SKILL_NOT_FOUND";
+      if (err instanceof IntegrationNotFoundError) {
+        code = "INTEGRATION_NOT_FOUND";
       } else if (message === "Tool execution timed out") {
         code = "TIMEOUT";
       }
@@ -199,7 +199,7 @@ export class GatewayConnection {
       });
 
       this.logger.toolCall({
-        skillId,
+        integrationId,
         toolName,
         requestId,
         durationMs: Date.now() - start,

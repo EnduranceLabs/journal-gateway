@@ -1,6 +1,6 @@
-import type { SkillDefinition } from "../config.js";
+import type { McpServerConfig } from "../config.js";
 
-export const postgresql: SkillDefinition = {
+export const postgresql: McpServerConfig = {
   id: "postgresql",
   type: "mcp_server",
   name: "PostgreSQL",

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export interface SkillDefinition {
+export interface McpServerConfig {
   id: string;
   type: "mcp_server";
   name: string;
@@ -13,43 +13,43 @@ export interface SkillDefinition {
 const GatewayConfigSchema = z.object({
   token: z.string().min(1, "JOURNAL_GATEWAY_TOKEN is required"),
   url: z.string().url(),
-  skills: z.array(z.string()).min(1, "At least one skill must be specified"),
+  integrations: z.array(z.string()).min(1, "At least one integration must be specified"),
   logLevel: z.enum(["debug", "info", "warn", "error"]),
 });
 
 export type GatewayConfig = z.infer<typeof GatewayConfigSchema> & {
-  skillDefinitions: SkillDefinition[];
-  skillEnvVars: Map<string, Record<string, string>>;
+  mcpServers: McpServerConfig[];
+  mcpEnvVars: Map<string, Record<string, string>>;
 };
 
 export function parseConfig(
-  catalog: Record<string, SkillDefinition>,
+  catalog: Record<string, McpServerConfig>,
   env: Record<string, string | undefined> = process.env
 ): GatewayConfig {
   const token = env.JOURNAL_GATEWAY_TOKEN ?? "";
   const url = env.JOURNAL_GATEWAY_URL ?? "wss://gateway.journal.one/v1";
-  const skillsRaw = env.SKILLS ?? "";
+  const integrationsRaw = env.INTEGRATIONS ?? "";
   const logLevel = (env.LOG_LEVEL ?? "info") as
     | "debug"
     | "info"
     | "warn"
     | "error";
 
-  const skills = skillsRaw
+  const integrations = integrationsRaw
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const base = GatewayConfigSchema.parse({ token, url, skills, logLevel });
+  const base = GatewayConfigSchema.parse({ token, url, integrations, logLevel });
 
-  const skillDefinitions: SkillDefinition[] = [];
-  const skillEnvVars = new Map<string, Record<string, string>>();
+  const mcpServers: McpServerConfig[] = [];
+  const mcpEnvVars = new Map<string, Record<string, string>>();
 
-  for (const skillId of base.skills) {
-    const definition = catalog[skillId];
+  for (const integrationId of base.integrations) {
+    const definition = catalog[integrationId];
     if (!definition) {
       throw new Error(
-        `Unknown skill "${skillId}". Available skills: ${Object.keys(catalog).join(", ")}`
+        `Unknown integration "${integrationId}". Available integrations: ${Object.keys(catalog).join(", ")}`
       );
     }
 
@@ -58,15 +58,15 @@ export function parseConfig(
       const value = env[ourKey];
       if (!value) {
         throw new Error(
-          `Skill "${skillId}" requires environment variable ${ourKey}`
+          `Integration "${integrationId}" requires environment variable ${ourKey}`
         );
       }
       resolvedEnv[childKey] = value;
     }
 
-    skillDefinitions.push(definition);
-    skillEnvVars.set(skillId, resolvedEnv);
+    mcpServers.push(definition);
+    mcpEnvVars.set(integrationId, resolvedEnv);
   }
 
-  return { ...base, skillDefinitions, skillEnvVars };
+  return { ...base, mcpServers, mcpEnvVars };
 }

@@ -3,7 +3,7 @@
   "service_sends": {
     "type": "tool_call",
     "requestId": "req_abc123",
-    "skillId": "postgresql",
+    "integrationId": "postgresql",
     "toolName": "query",
     "arguments": {
       "sql": "SELECT count(*) FROM users WHERE created_at > now() - interval '24 hours'"

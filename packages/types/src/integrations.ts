@@ -8,7 +8,7 @@ export const ToolDefinitionSchema = z.object({
 
 export type ToolDefinition = z.infer<typeof ToolDefinitionSchema>;
 
-export const McpServerSkillSchema = z.object({
+export const McpServerIntegrationSchema = z.object({
   type: z.literal("mcp_server"),
   id: z.string(),
   name: z.string(),
@@ -16,24 +16,24 @@ export const McpServerSkillSchema = z.object({
   tools: z.array(ToolDefinitionSchema),
 });
 
-export type McpServerSkill = z.infer<typeof McpServerSkillSchema>;
+export type McpServerIntegration = z.infer<typeof McpServerIntegrationSchema>;
 
-export const AgentSkillSchema = z.object({
-  type: z.literal("agent_skill"),
+export const AgentIntegrationSchema = z.object({
+  type: z.literal("agent"),
   id: z.string(),
   name: z.string(),
   description: z.string(),
   tools: z.array(ToolDefinitionSchema),
 });
 
-export type AgentSkill = z.infer<typeof AgentSkillSchema>;
+export type AgentIntegration = z.infer<typeof AgentIntegrationSchema>;
 
-export const SkillRegistrationSchema = z.discriminatedUnion("type", [
-  McpServerSkillSchema,
-  AgentSkillSchema,
+export const IntegrationSchema = z.discriminatedUnion("type", [
+  McpServerIntegrationSchema,
+  AgentIntegrationSchema,
 ]);
 
-export type SkillRegistration = z.infer<typeof SkillRegistrationSchema>;
+export type Integration = z.infer<typeof IntegrationSchema>;
 
 export const TextContentSchema = z.object({
   type: z.literal("text"),

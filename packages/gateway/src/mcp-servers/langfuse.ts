@@ -1,6 +1,6 @@
-import type { SkillDefinition } from "../config.js";
+import type { McpServerConfig } from "../config.js";
 
-export const langfuse: SkillDefinition = {
+export const langfuse: McpServerConfig = {
   id: "langfuse",
   type: "mcp_server",
   name: "Langfuse",

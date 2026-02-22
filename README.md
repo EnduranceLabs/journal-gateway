@@ -10,7 +10,7 @@ Connect your tools to the [Journal](https://journal.one) agent. Deploy a gateway
 npm install -g @journal/gateway
 
 JOURNAL_GATEWAY_TOKEN=gw_your_token \
-  SKILLS=postgresql \
+  INTEGRATIONS=postgresql \
   DATABASE_URL=postgresql://localhost:5432/mydb \
   journal-gateway
 ```
@@ -19,7 +19,7 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token \
 
 ```bash
 docker run -e JOURNAL_GATEWAY_TOKEN=gw_your_token \
-  -e SKILLS=postgresql \
+  -e INTEGRATIONS=postgresql \
   -e DATABASE_URL=postgresql://localhost:5432/mydb \
   ghcr.io/journal/gateway
 ```
@@ -32,24 +32,24 @@ All configuration is via environment variables.
 |----------|----------|---------|-------------|
 | `JOURNAL_GATEWAY_TOKEN` | yes | — | Gateway auth token (starts with `gw_`) |
 | `JOURNAL_GATEWAY_URL` | no | `wss://gateway.journal.one/v1` | WebSocket endpoint |
-| `SKILLS` | yes | — | Comma-separated skill IDs to enable |
+| `INTEGRATIONS` | yes | — | Comma-separated integration IDs to enable |
 | `LOG_LEVEL` | no | `info` | Log level: `debug`, `info`, `warn`, `error` |
 
-## Available Skills
+## Available Integrations
 
-| Skill ID | Description | Required Env Vars |
-|----------|-------------|-------------------|
+| Integration ID | Description | Required Env Vars |
+|----------------|-------------|-------------------|
+| `clickhouse` | Query ClickHouse | `CLICKHOUSE_URL`, `CLICKHOUSE_USERNAME`, `CLICKHOUSE_PASSWORD` |
+| `langfuse` | Access Langfuse data | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` |
 | `postgresql` | Query PostgreSQL databases | `DATABASE_URL` |
 | `railway` | Manage Railway services | `RAILWAY_TOKEN` |
 | `sentry` | Query Sentry errors | `SENTRY_AUTH_TOKEN` |
-| `langfuse` | Access Langfuse data | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` |
-| `clickhouse` | Query ClickHouse | `CLICKHOUSE_URL`, `CLICKHOUSE_USERNAME`, `CLICKHOUSE_PASSWORD` |
 
-### Multiple Skills
+### Multiple Integrations
 
 ```bash
 JOURNAL_GATEWAY_TOKEN=gw_your_token \
-  SKILLS=postgresql,sentry \
+  INTEGRATIONS=postgresql,sentry \
   DATABASE_URL=postgresql://localhost:5432/mydb \
   SENTRY_AUTH_TOKEN=your_sentry_token \
   journal-gateway

@@ -8,22 +8,22 @@ export {
 
 export {
   ToolDefinitionSchema,
-  McpServerSkillSchema,
-  AgentSkillSchema,
-  SkillRegistrationSchema,
+  McpServerIntegrationSchema,
+  AgentIntegrationSchema,
+  IntegrationSchema,
   TextContentSchema,
   ImageContentSchema,
   ContentBlockSchema,
   ToolResultSchema,
   type ToolDefinition,
-  type McpServerSkill,
-  type AgentSkill,
-  type SkillRegistration,
+  type McpServerIntegration,
+  type AgentIntegration,
+  type Integration,
   type TextContent,
   type ImageContent,
   type ContentBlock,
   type ToolResult,
-} from "./skills.js";
+} from "./integrations.js";
 
 export {
   AuthenticateMessageSchema,

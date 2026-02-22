@@ -28,7 +28,7 @@ describe("Gateway → Service messages", () => {
   it("parses register message", () => {
     const msg = {
       type: "register",
-      skills: [
+      integrations: [
         {
           type: "mcp_server" as const,
           id: "postgresql",
@@ -97,7 +97,7 @@ describe("Gateway → Service messages", () => {
       },
       {
         type: "register",
-        skills: [],
+        integrations: [],
       },
       {
         type: "tool_result",
@@ -165,7 +165,7 @@ describe("Service → Gateway messages", () => {
   it("parses registered message", () => {
     const msg = {
       type: "registered",
-      skillCount: 2,
+      integrationCount: 2,
       toolCount: 5,
     };
     expect(RegisteredMessageSchema.parse(msg)).toEqual(msg);
@@ -175,7 +175,7 @@ describe("Service → Gateway messages", () => {
     const msg = {
       type: "tool_call",
       requestId: "req_abc",
-      skillId: "postgresql",
+      integrationId: "postgresql",
       toolName: "query",
       arguments: { sql: "SELECT 1" },
     };
@@ -191,11 +191,11 @@ describe("Service → Gateway messages", () => {
     const messages = [
       { type: "authenticated", organizationId: "org_1" },
       { type: "auth_error", error: "bad token" },
-      { type: "registered", skillCount: 1, toolCount: 3 },
+      { type: "registered", integrationCount: 1, toolCount: 3 },
       {
         type: "tool_call",
         requestId: "req_1",
-        skillId: "pg",
+        integrationId: "pg",
         toolName: "query",
         arguments: {},
       },

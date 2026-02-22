@@ -1,8 +1,8 @@
 {
-  "_description": "Gateway registers its skills and tools, service acknowledges",
+  "_description": "Gateway registers its integrations and tools, service acknowledges",
   "gateway_sends": {
     "type": "register",
-    "skills": [
+    "integrations": [
       {
         "type": "mcp_server",
         "id": "postgresql",
@@ -35,7 +35,7 @@
   },
   "service_responds": {
     "type": "registered",
-    "skillCount": 1,
+    "integrationCount": 1,
     "toolCount": 2
   }
 }

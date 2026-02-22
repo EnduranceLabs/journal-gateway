@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { GatewayErrorSchema } from "./errors.js";
-import { SkillRegistrationSchema, ToolResultSchema } from "./skills.js";
+import { IntegrationSchema, ToolResultSchema } from "./integrations.js";
 
 // --- Gateway → Service messages ---
 
@@ -15,7 +15,7 @@ export type AuthenticateMessage = z.infer<typeof AuthenticateMessageSchema>;
 
 export const RegisterMessageSchema = z.object({
   type: z.literal("register"),
-  skills: z.array(SkillRegistrationSchema),
+  integrations: z.array(IntegrationSchema),
 });
 
 export type RegisterMessage = z.infer<typeof RegisterMessageSchema>;
@@ -71,7 +71,7 @@ export type AuthErrorMessage = z.infer<typeof AuthErrorMessageSchema>;
 
 export const RegisteredMessageSchema = z.object({
   type: z.literal("registered"),
-  skillCount: z.number(),
+  integrationCount: z.number(),
   toolCount: z.number(),
 });
 
@@ -80,7 +80,7 @@ export type RegisteredMessage = z.infer<typeof RegisteredMessageSchema>;
 export const ToolCallMessageSchema = z.object({
   type: z.literal("tool_call"),
   requestId: z.string(),
-  skillId: z.string(),
+  integrationId: z.string(),
   toolName: z.string(),
   arguments: z.record(z.unknown()),
 });

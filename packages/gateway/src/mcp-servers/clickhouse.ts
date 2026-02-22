@@ -1,6 +1,6 @@
-import type { SkillDefinition } from "../config.js";
+import type { McpServerConfig } from "../config.js";
 
-export const clickhouse: SkillDefinition = {
+export const clickhouse: McpServerConfig = {
   id: "clickhouse",
   type: "mcp_server",
   name: "ClickHouse",

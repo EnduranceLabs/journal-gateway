@@ -7,7 +7,7 @@
   "$defs": {
     "GatewayErrorCode": {
       "type": "string",
-      "enum": ["SKILL_NOT_FOUND", "TOOL_NOT_FOUND", "EXECUTION_FAILED", "TIMEOUT"],
+      "enum": ["INTEGRATION_NOT_FOUND", "TOOL_NOT_FOUND", "EXECUTION_FAILED", "TIMEOUT"],
       "description": "Gateway error codes"
     },
 

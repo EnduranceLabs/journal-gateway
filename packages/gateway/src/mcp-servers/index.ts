@@ -1,4 +1,4 @@
-import type { SkillDefinition } from "../config.js";
+import type { McpServerConfig } from "../config.js";
 import { postgresql } from "./postgresql.js";
 import { railway } from "./railway.js";
 import { sentry } from "./sentry.js";
@@ -11,7 +11,7 @@ export { sentry } from "./sentry.js";
 export { langfuse } from "./langfuse.js";
 export { clickhouse } from "./clickhouse.js";
 
-export const BUILT_IN_SKILLS: Record<string, SkillDefinition> = {
+export const BUILT_IN_MCP_SERVERS: Record<string, McpServerConfig> = {
   postgresql,
   railway,
   sentry,

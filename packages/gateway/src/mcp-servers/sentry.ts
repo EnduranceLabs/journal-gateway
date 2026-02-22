@@ -1,6 +1,6 @@
-import type { SkillDefinition } from "../config.js";
+import type { McpServerConfig } from "../config.js";
 
-export const sentry: SkillDefinition = {
+export const sentry: McpServerConfig = {
   id: "sentry",
   type: "mcp_server",
   name: "Sentry",

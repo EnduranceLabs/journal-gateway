@@ -59,14 +59,14 @@ Sent immediately after WebSocket connection opens.
 
 #### `register`
 
-Sent after successful authentication. Declares all available skills and their tools.
+Sent after successful authentication. Declares all available integrations and their tools.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | `"register"` | yes | Message discriminator |
-| `skills` | `SkillRegistration[]` | yes | Array of skill registrations |
+| `integrations` | `Integration[]` | yes | Array of integration registrations |
 
-See [skills.schema.json](./schemas/skills.schema.json) for `SkillRegistration` definition.
+See [integrations.schema.json](./schemas/integrations.schema.json) for `Integration` definition.
 
 #### `tool_result`
 
@@ -119,24 +119,24 @@ Sent when authentication fails.
 
 #### `registered`
 
-Sent after successful skill registration.
+Sent after successful integration registration.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | `"registered"` | yes | Message discriminator |
-| `skillCount` | `number` | yes | Number of registered skills |
+| `integrationCount` | `number` | yes | Number of registered integrations |
 | `toolCount` | `number` | yes | Total number of registered tools |
 
 #### `tool_call`
 
-Sent to invoke a tool on a registered skill.
+Sent to invoke a tool on a registered integration.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | `"tool_call"` | yes | Message discriminator |
 | `requestId` | `string` | yes | Unique request ID for correlation |
-| `skillId` | `string` | yes | Target skill identifier |
-| `toolName` | `string` | yes | Tool name within the skill |
+| `integrationId` | `string` | yes | Target integration identifier |
+| `toolName` | `string` | yes | Tool name within the integration |
 | `arguments` | `object` | yes | Tool input arguments |
 
 #### `ping`
@@ -176,8 +176,8 @@ Multiple `tool_call` messages may be in flight simultaneously. Each has a unique
 
 | Code | Description |
 |------|-------------|
-| `SKILL_NOT_FOUND` | The requested `skillId` is not registered |
-| `TOOL_NOT_FOUND` | The requested `toolName` does not exist on the skill |
+| `INTEGRATION_NOT_FOUND` | The requested `integrationId` is not registered |
+| `TOOL_NOT_FOUND` | The requested `toolName` does not exist on the integration |
 | `EXECUTION_FAILED` | Tool execution threw an error |
 | `TIMEOUT` | Tool execution exceeded the timeout |
 
@@ -187,6 +187,6 @@ See [errors.schema.json](./schemas/errors.schema.json) for the full error type d
 
 1. **Outbound-only connections:** The gateway initiates all connections. No inbound ports required.
 2. **Credentials stay local:** Database passwords, API tokens, and other secrets are configured on the gateway and never transmitted to Journal.
-3. **Read-only default:** Skills should default to read-only access where possible.
+3. **Read-only default:** Integrations should default to read-only access where possible.
 4. **Token-based auth:** Gateway tokens (`gw_*`) are scoped to a single organization.
 5. **TLS required:** Production connections must use `wss://`.

@@ -32,18 +32,18 @@ protocol/    # Protocol specification (JSON Schema + README)
 ### `packages/types`
 
 Protocol types defined with Zod schemas. Source files:
-- `src/errors.ts` — `GatewayError`, error code enum (`SKILL_NOT_FOUND`, `TOOL_NOT_FOUND`, `EXECUTION_FAILED`, `TIMEOUT`)
-- `src/skills.ts` — `SkillRegistration`, `ToolDefinition`, `ToolResult`, `ContentBlock`
+- `src/errors.ts` — `GatewayError`, error code enum (`INTEGRATION_NOT_FOUND`, `TOOL_NOT_FOUND`, `EXECUTION_FAILED`, `TIMEOUT`)
+- `src/integrations.ts` — `Integration`, `ToolDefinition`, `ToolResult`, `ContentBlock`
 - `src/messages.ts` — All message types with `z.discriminatedUnion("type", [...])` for `GatewayMessage` and `ServiceMessage`
 - `src/index.ts` — Re-exports everything
 
 ### `packages/gateway`
 
 Gateway runtime. Source files:
-- `src/config.ts` — `SkillDefinition` interface and `parseConfig` with Zod validation
-- `src/skills/` — Built-in skill catalog (one file per skill, barrel-exported via `skills/index.ts`)
+- `src/config.ts` — `McpServerConfig` interface and `parseConfig` with Zod validation
+- `src/mcp-servers/` — Built-in MCP server catalog (one file per integration, barrel-exported via `mcp-servers/index.ts`)
 - `src/mcp-process.ts` — Spawns MCP server subprocesses via `@modelcontextprotocol/sdk`
-- `src/skill-runtime.ts` — Manages skill lifecycle (start, list tools, call tools)
+- `src/tool-runtime.ts` — Manages integration lifecycle (start, list tools, call tools)
 - `src/connection.ts` — WebSocket connection to Journal service with reconnection
 - `src/logger.ts` — Structured JSON logger
 - `src/index.ts` — Entry point
@@ -68,7 +68,7 @@ function makeEnv(overrides: Record<string, string> = {}): Record<string, string>
   return {
     JOURNAL_GATEWAY_TOKEN: "gw_test123",
     JOURNAL_GATEWAY_URL: "wss://gateway.journal.one/v1",
-    SKILLS: "postgresql",
+    INTEGRATIONS: "postgresql",
     DATABASE_URL: "postgresql://localhost:5432/test",
     LOG_LEVEL: "info",
     ...overrides,
@@ -78,7 +78,7 @@ function makeEnv(overrides: Record<string, string> = {}): Record<string, string>
 
 ### Process event testing
 
-The gateway uses `EventEmitter` patterns for process lifecycle. Tests verify events like connection state changes, skill registration, and tool call handling.
+The gateway uses `EventEmitter` patterns for process lifecycle. Tests verify events like connection state changes, integration registration, and tool call handling.
 
 ## Code Conventions
 

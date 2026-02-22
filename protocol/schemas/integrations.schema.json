@@ -1,17 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://journal.one/schemas/gateway/skills.schema.json",
-  "title": "Journal Gateway Skill Definitions",
-  "description": "Skill, tool, and result type definitions for the gateway protocol",
+  "$id": "https://journal.one/schemas/gateway/integrations.schema.json",
+  "title": "Journal Gateway Integration Definitions",
+  "description": "Integration, tool, and result type definitions for the gateway protocol",
 
   "$defs": {
     "ToolDefinition": {
       "type": "object",
-      "description": "A tool exposed by a skill",
+      "description": "A tool exposed by an integration",
       "properties": {
         "name": {
           "type": "string",
-          "description": "Tool name (unique within a skill)"
+          "description": "Tool name (unique within an integration)"
         },
         "description": {
           "type": "string",
@@ -26,65 +26,65 @@
       "additionalProperties": false
     },
 
-    "McpServerSkill": {
+    "McpServerIntegration": {
       "type": "object",
-      "description": "A skill backed by an MCP server process",
+      "description": "An integration backed by an MCP server process",
       "properties": {
         "type": { "const": "mcp_server" },
         "id": {
           "type": "string",
-          "description": "Unique skill identifier"
+          "description": "Unique integration identifier"
         },
         "name": {
           "type": "string",
-          "description": "Human-readable skill name"
+          "description": "Human-readable integration name"
         },
         "description": {
           "type": "string",
-          "description": "What this skill provides"
+          "description": "What this integration provides"
         },
         "tools": {
           "type": "array",
           "items": { "$ref": "#/$defs/ToolDefinition" },
-          "description": "Tools exposed by this skill"
+          "description": "Tools exposed by this integration"
         }
       },
       "required": ["type", "id", "name", "description", "tools"],
       "additionalProperties": false
     },
 
-    "AgentSkill": {
+    "AgentIntegration": {
       "type": "object",
-      "description": "A skill backed by an agent",
+      "description": "An integration backed by an agent",
       "properties": {
-        "type": { "const": "agent_skill" },
+        "type": { "const": "agent" },
         "id": {
           "type": "string",
-          "description": "Unique skill identifier"
+          "description": "Unique integration identifier"
         },
         "name": {
           "type": "string",
-          "description": "Human-readable skill name"
+          "description": "Human-readable integration name"
         },
         "description": {
           "type": "string",
-          "description": "What this skill provides"
+          "description": "What this integration provides"
         },
         "tools": {
           "type": "array",
           "items": { "$ref": "#/$defs/ToolDefinition" },
-          "description": "Tools exposed by this skill"
+          "description": "Tools exposed by this integration"
         }
       },
       "required": ["type", "id", "name", "description", "tools"],
       "additionalProperties": false
     },
 
-    "SkillRegistration": {
-      "description": "A skill registration, discriminated on the type field",
+    "Integration": {
+      "description": "An integration registration, discriminated on the type field",
       "oneOf": [
-        { "$ref": "#/$defs/McpServerSkill" },
-        { "$ref": "#/$defs/AgentSkill" }
+        { "$ref": "#/$defs/McpServerIntegration" },
+        { "$ref": "#/$defs/AgentIntegration" }
       ]
     },
 

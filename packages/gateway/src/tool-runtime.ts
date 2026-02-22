@@ -1,9 +1,9 @@
-import type { SkillRegistration, ToolResult } from "@journal-edge/types";
+import type { Integration, ToolResult } from "@journal-edge/types";
 import type { GatewayConfig } from "./config.js";
 import { McpProcess } from "./mcp-process.js";
 import { Logger } from "./logger.js";
 
-export class SkillRuntime {
+export class ToolRuntime {
   private processes = new Map<string, McpProcess>();
   private logger: Logger;
 
@@ -12,16 +12,16 @@ export class SkillRuntime {
   }
 
   async start(): Promise<void> {
-    this.logger.info("Starting skill runtime", {
-      skills: this.config.skills,
+    this.logger.info("Starting tool runtime", {
+      integrations: this.config.integrations,
     });
 
-    for (const definition of this.config.skillDefinitions) {
-      const env = this.config.skillEnvVars.get(definition.id) ?? {};
+    for (const definition of this.config.mcpServers) {
+      const env = this.config.mcpEnvVars.get(definition.id) ?? {};
       const process = new McpProcess(definition, env, this.logger);
 
       process.on("crash", (error) => {
-        this.logger.error(`Skill "${definition.id}" crashed`, {
+        this.logger.error(`Integration "${definition.id}" crashed`, {
           error: error.message,
         });
       });
@@ -30,15 +30,15 @@ export class SkillRuntime {
       this.processes.set(definition.id, process);
     }
 
-    this.logger.info("Skill runtime started", {
-      skillCount: this.processes.size,
+    this.logger.info("Tool runtime started", {
+      integrationCount: this.processes.size,
     });
   }
 
-  async getRegistration(): Promise<SkillRegistration[]> {
-    const registrations: SkillRegistration[] = [];
+  async getRegistration(): Promise<Integration[]> {
+    const registrations: Integration[] = [];
 
-    for (const definition of this.config.skillDefinitions) {
+    for (const definition of this.config.mcpServers) {
       const process = this.processes.get(definition.id);
       if (!process || !process.isRunning()) continue;
 
@@ -56,33 +56,33 @@ export class SkillRuntime {
   }
 
   async callTool(
-    skillId: string,
+    integrationId: string,
     toolName: string,
     args: Record<string, unknown>
   ): Promise<ToolResult> {
-    const process = this.processes.get(skillId);
+    const process = this.processes.get(integrationId);
     if (!process) {
-      throw new SkillNotFoundError(skillId);
+      throw new IntegrationNotFoundError(integrationId);
     }
     if (!process.isRunning()) {
-      throw new SkillNotFoundError(skillId, "Skill process is not running");
+      throw new IntegrationNotFoundError(integrationId, "Integration process is not running");
     }
 
     return process.callTool(toolName, args);
   }
 
   async stop(): Promise<void> {
-    this.logger.info("Stopping skill runtime");
+    this.logger.info("Stopping tool runtime");
     const stops = Array.from(this.processes.values()).map((p) => p.stop());
     await Promise.allSettled(stops);
     this.processes.clear();
-    this.logger.info("Skill runtime stopped");
+    this.logger.info("Tool runtime stopped");
   }
 }
 
-export class SkillNotFoundError extends Error {
-  constructor(skillId: string, detail?: string) {
-    super(detail ?? `Skill "${skillId}" is not registered on this gateway`);
-    this.name = "SkillNotFoundError";
+export class IntegrationNotFoundError extends Error {
+  constructor(integrationId: string, detail?: string) {
+    super(detail ?? `Integration "${integrationId}" is not registered on this gateway`);
+    this.name = "IntegrationNotFoundError";
   }
 }

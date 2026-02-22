@@ -29,16 +29,16 @@
 
     "RegisterMessage": {
       "type": "object",
-      "description": "Sent by the gateway after successful authentication to declare available skills",
+      "description": "Sent by the gateway after successful authentication to declare available integrations",
       "properties": {
         "type": { "const": "register" },
-        "skills": {
+        "integrations": {
           "type": "array",
-          "items": { "$ref": "skills.schema.json#/$defs/SkillRegistration" },
-          "description": "Array of skill registrations"
+          "items": { "$ref": "integrations.schema.json#/$defs/Integration" },
+          "description": "Array of integration registrations"
         }
       },
-      "required": ["type", "skills"],
+      "required": ["type", "integrations"],
       "additionalProperties": false
     },
 
@@ -51,7 +51,7 @@
           "type": "string",
           "description": "Correlates with the original tool_call requestId"
         },
-        "result": { "$ref": "skills.schema.json#/$defs/ToolResult" }
+        "result": { "$ref": "integrations.schema.json#/$defs/ToolResult" }
       },
       "required": ["type", "requestId", "result"],
       "additionalProperties": false
@@ -116,45 +116,45 @@
 
     "RegisteredMessage": {
       "type": "object",
-      "description": "Sent by the service after successful skill registration",
+      "description": "Sent by the service after successful integration registration",
       "properties": {
         "type": { "const": "registered" },
-        "skillCount": {
+        "integrationCount": {
           "type": "number",
-          "description": "Number of registered skills"
+          "description": "Number of registered integrations"
         },
         "toolCount": {
           "type": "number",
           "description": "Total number of registered tools"
         }
       },
-      "required": ["type", "skillCount", "toolCount"],
+      "required": ["type", "integrationCount", "toolCount"],
       "additionalProperties": false
     },
 
     "ToolCallMessage": {
       "type": "object",
-      "description": "Sent by the service to invoke a tool on a registered skill",
+      "description": "Sent by the service to invoke a tool on a registered integration",
       "properties": {
         "type": { "const": "tool_call" },
         "requestId": {
           "type": "string",
           "description": "Unique request ID for correlation"
         },
-        "skillId": {
+        "integrationId": {
           "type": "string",
-          "description": "Target skill identifier"
+          "description": "Target integration identifier"
         },
         "toolName": {
           "type": "string",
-          "description": "Tool name within the skill"
+          "description": "Tool name within the integration"
         },
         "arguments": {
           "type": "object",
           "description": "Tool input arguments"
         }
       },
-      "required": ["type", "requestId", "skillId", "toolName", "arguments"],
+      "required": ["type", "requestId", "integrationId", "toolName", "arguments"],
       "additionalProperties": false
     },
 

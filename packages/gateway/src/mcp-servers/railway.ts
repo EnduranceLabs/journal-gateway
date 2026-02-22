@@ -1,6 +1,6 @@
-import type { SkillDefinition } from "../config.js";
+import type { McpServerConfig } from "../config.js";
 
-export const railway: SkillDefinition = {
+export const railway: McpServerConfig = {
   id: "railway",
   type: "mcp_server",
   name: "Railway",

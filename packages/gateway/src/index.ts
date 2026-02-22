@@ -1,29 +1,29 @@
 #!/usr/bin/env node
 
 import { parseConfig } from "./config.js";
-import { BUILT_IN_SKILLS } from "./skills/index.js";
-import { SkillRuntime } from "./skill-runtime.js";
+import { BUILT_IN_MCP_SERVERS } from "./mcp-servers/index.js";
+import { ToolRuntime } from "./tool-runtime.js";
 import { GatewayConnection } from "./connection.js";
 import { Logger } from "./logger.js";
 
 export { GatewayConnection } from "./connection.js";
-export { SkillRuntime } from "./skill-runtime.js";
+export { ToolRuntime } from "./tool-runtime.js";
 export { McpProcess } from "./mcp-process.js";
 export { parseConfig } from "./config.js";
-export type { GatewayConfig, SkillDefinition } from "./config.js";
-export { BUILT_IN_SKILLS } from "./skills/index.js";
+export type { GatewayConfig, McpServerConfig } from "./config.js";
+export { BUILT_IN_MCP_SERVERS } from "./mcp-servers/index.js";
 export { Logger } from "./logger.js";
 
 async function main(): Promise<void> {
-  const config = parseConfig(BUILT_IN_SKILLS);
+  const config = parseConfig(BUILT_IN_MCP_SERVERS);
   const logger = new Logger(config.logLevel);
 
   logger.info("Starting Journal Gateway", {
-    skills: config.skills,
+    integrations: config.integrations,
     url: config.url,
   });
 
-  const runtime = new SkillRuntime(config);
+  const runtime = new ToolRuntime(config);
   await runtime.start();
 
   const connection = new GatewayConnection(config, runtime);
