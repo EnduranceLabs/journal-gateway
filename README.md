@@ -2,6 +2,27 @@
 
 Connect your tools to the [Journal](https://journal.one) agent. Deploy a gateway that connects your data sources (databases, observability platforms, etc.) to Journal over an outbound WebSocket. Your credentials never leave your network.
 
+## How It Works
+
+```
+┌─────────────────────────────────────┐
+│           Your Network              │
+│                                     │
+│  ┌──────────┐    ┌───────────────┐  │
+│  │ Database │◄──│               │  │
+│  └──────────┘    │   Gateway    │  │
+│  ┌──────────┐    │  (this repo) │  │
+│  │  Sentry  │◄──│               │  │
+│  └──────────┘    └───────┬───────┘  │
+│                          │ outbound │
+└──────────────────────────┼──────────┘
+                           │ wss://
+                    ┌──────▼───────┐
+                    │   Journal    │
+                    │   Service    │
+                    └──────────────┘
+```
+
 ## Quick Start
 
 ### npm
@@ -58,19 +79,6 @@ Each server object:
 | `description` | no | What this integration does |
 | `envVars` | no | Mapping from gateway env var to subprocess env var |
 
-## Packaging
-
-```bash
-# Docker
-docker build -f packaging/docker/Dockerfile -t journal-gateway .
-
-# npm publish
-./packaging/npm/publish.sh
-
-# Docker publish
-./packaging/docker/publish.sh
-```
-
 ## Skills
 
 Skills are prompt/workflow templates that guide agent behavior. Place Markdown files in a directory and point `SKILLS_DIR` at it:
@@ -82,64 +90,6 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token \
 ```
 
 Each `.md` file becomes a skill with `id` derived from the filename and `content` as the raw file contents.
-
-See the Skill data type in [spec/protocol.md](./spec/protocol.md) for the wire format.
-
-## Architecture
-
-```
-gateway/
-  src/
-    types/       # Protocol types (Zod schemas)
-    common/      # Shared utilities (logger)
-    connection.ts  # WebSocket connection handling
-    runtime.ts     # MCP + skills runtime (IntegrationProvider)
-    mcp-client.ts  # MCP server subprocess wrapper
-    skill-client.ts # Skill file loader
-    config.ts      # Configuration parsing
-    main.ts        # CLI entry point
-```
-
-The gateway connects outbound to the Journal service over WebSocket. It manages MCP server subprocesses and skill files, routing tool calls from the service to the appropriate MCP server.
-
-```
-┌─────────────────────────────────────┐
-│           Your Network              │
-│                                     │
-│  ┌──────────┐    ┌───────────────┐  │
-│  │ Database │◄──│               │  │
-│  └──────────┘    │   Gateway    │  │
-│  ┌──────────┐    │  (this repo) │  │
-│  │  Sentry  │◄──│               │  │
-│  └──────────┘    └───────┬───────┘  │
-│                          │ outbound │
-└──────────────────────────┼──────────┘
-                           │ wss://
-                    ┌──────▼───────┐
-                    │   Journal    │
-                    │   Service    │
-                    └──────────────┘
-```
-
-## Protocol
-
-The gateway communicates with Journal over WebSocket using a simple JSON protocol. See [spec/protocol.md](./spec/protocol.md) for the full specification.
-
-## Development
-
-```bash
-# Install dependencies
-pnpm install
-
-# Build
-pnpm build
-
-# Type check
-pnpm typecheck
-
-# Run tests
-pnpm test
-```
 
 ## License
 
