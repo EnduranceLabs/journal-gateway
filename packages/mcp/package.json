@@ -21,6 +21,7 @@
   "dependencies": {
     "@journal-edge/types": "workspace:*",
     "@journal/gateway": "workspace:*",
+    "@journal/skills": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12",
     "zod": "^3.24"
   },

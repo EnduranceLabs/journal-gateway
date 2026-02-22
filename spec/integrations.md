@@ -194,3 +194,9 @@ await gateway.connect();
 ```
 
 The gateway core knows nothing about MCP, databases, or any specific tool. It calls `IntegrationProvider` methods and sends the results over the wire. The provider decides how to fulfill those calls — by spawning MCP subprocesses, making HTTP requests, querying databases directly, or anything else.
+
+## Skills vs Integrations
+
+Integrations provide callable tools that the agent invokes during execution. Skills are a separate concept — prompt/workflow templates that guide agent behavior rather than providing tools. See [skills.md](./skills.md) for the full skills specification.
+
+Both are sent during the `register` message, but they serve different purposes and are loaded through different interfaces (`IntegrationProvider` for integrations, `SkillProvider` for skills).

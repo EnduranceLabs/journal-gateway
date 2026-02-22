@@ -32,23 +32,52 @@ All configuration is via environment variables.
 |----------|----------|---------|-------------|
 | `JOURNAL_GATEWAY_TOKEN` | yes | — | Gateway auth token (starts with `gw_`) |
 | `JOURNAL_GATEWAY_URL` | no | `wss://gateway.journal.one/v1` | WebSocket endpoint |
-| `INTEGRATIONS` | yes | — | Comma-separated integration IDs to enable |
+| `INTEGRATIONS` | no* | — | Comma-separated integration IDs to enable |
+| `SKILLS_DIR` | no* | — | Path to directory containing skill files |
 | `LOG_LEVEL` | no | `info` | Log level: `debug`, `info`, `warn`, `error` |
+
+*At least one of `INTEGRATIONS` or `SKILLS_DIR` must be set.
 
 ## Available Integrations
 
 No built-in integrations are included yet. See `packages/mcp/src/integrations/` to add new ones.
+
+## Packaging
+
+```bash
+# Docker
+docker build -f packaging/docker/Dockerfile -t journal-gateway .
+
+# npm publish
+./scripts/publish-npm.sh
+
+# Docker publish
+./scripts/publish-docker.sh
+```
+
+## Skills
+
+Skills are prompt/workflow templates that guide agent behavior. Place Markdown files with YAML front matter in a directory and point `SKILLS_DIR` at it:
+
+```bash
+JOURNAL_GATEWAY_TOKEN=gw_your_token \
+  SKILLS_DIR=/opt/journal/skills \
+  journal-gateway
+```
+
+See [spec/skills.md](./spec/skills.md) for the full specification.
 
 ## Architecture
 
 ```
 packages/
   types/     # Protocol types (Zod schemas) — stable
-  gateway/   # Core connection library (IntegrationProvider interface) — stable
+  gateway/   # Core connection library (IntegrationProvider + SkillProvider) — stable
+  skills/    # Skill loading from Markdown files
   mcp/       # MCP integration provider + CLI entry point
 ```
 
-The gateway core (`packages/gateway/`) is a stable, minimal library that handles WebSocket connections and tool routing via a generic `IntegrationProvider` interface. The MCP implementation (`packages/mcp/`) provides the concrete integration by spawning MCP server subprocesses.
+The gateway core (`packages/gateway/`) is a stable, minimal library that handles WebSocket connections and tool routing via a generic `IntegrationProvider` interface. Skills are loaded through the `SkillProvider` interface. The MCP implementation (`packages/mcp/`) provides the concrete integration by spawning MCP server subprocesses, and wires in the skill loader.
 
 ```
 ┌─────────────────────────────────────┐
@@ -71,7 +100,7 @@ The gateway core (`packages/gateway/`) is a stable, minimal library that handles
 
 ## Protocol
 
-The gateway communicates with Journal over WebSocket using a simple JSON protocol. See [spec/protocol.md](./spec/protocol.md) for the full specification.
+The gateway communicates with Journal over WebSocket using a simple JSON protocol. See [spec/protocol.md](./spec/protocol.md) for the full specification, [spec/integrations.md](./spec/integrations.md) for integrations, and [spec/skills.md](./spec/skills.md) for skills.
 
 ## Development
 

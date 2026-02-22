@@ -15,12 +15,13 @@ export type McpConfig = GatewayConfig & {
   integrations: string[];
   mcpServers: McpServerConfig[];
   mcpEnvVars: Map<string, Record<string, string>>;
+  skillsDir: string | null;
 };
 
 const McpConfigSchema = z.object({
   token: z.string().min(1, "JOURNAL_GATEWAY_TOKEN is required"),
   url: z.string().url(),
-  integrations: z.array(z.string()).min(1, "At least one integration must be specified"),
+  integrations: z.array(z.string()),
   logLevel: z.enum(["debug", "info", "warn", "error"]),
 });
 
@@ -31,6 +32,7 @@ export function parseConfig(
   const token = env.JOURNAL_GATEWAY_TOKEN ?? "";
   const url = env.JOURNAL_GATEWAY_URL ?? "wss://gateway.journal.one/v1";
   const integrationsRaw = env.INTEGRATIONS ?? "";
+  const skillsDir = env.SKILLS_DIR ?? null;
   const logLevel = (env.LOG_LEVEL ?? "info") as
     | "debug"
     | "info"
@@ -41,6 +43,10 @@ export function parseConfig(
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+
+  if (integrations.length === 0 && !skillsDir) {
+    throw new Error("At least one integration (INTEGRATIONS) or a skills directory (SKILLS_DIR) must be specified");
+  }
 
   const base = McpConfigSchema.parse({ token, url, integrations, logLevel });
 
@@ -70,5 +76,5 @@ export function parseConfig(
     mcpEnvVars.set(integrationId, resolvedEnv);
   }
 
-  return { ...base, mcpServers, mcpEnvVars };
+  return { ...base, mcpServers, mcpEnvVars, skillsDir };
 }

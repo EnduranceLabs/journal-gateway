@@ -116,10 +116,20 @@ describe("parseConfig", () => {
     expect(() => parseConfig(testCatalog, env)).toThrow();
   });
 
-  it("throws on missing INTEGRATIONS", () => {
+  it("throws when neither INTEGRATIONS nor SKILLS_DIR is set", () => {
     const env = makeEnv();
     delete (env as Record<string, string | undefined>).INTEGRATIONS;
-    expect(() => parseConfig(testCatalog, env)).toThrow();
+    expect(() => parseConfig(testCatalog, env)).toThrow(
+      "At least one integration (INTEGRATIONS) or a skills directory (SKILLS_DIR) must be specified"
+    );
+  });
+
+  it("allows empty INTEGRATIONS when SKILLS_DIR is set", () => {
+    const env = makeEnv({ SKILLS_DIR: "/path/to/skills" });
+    delete (env as Record<string, string | undefined>).INTEGRATIONS;
+    const config = parseConfig(testCatalog, env);
+    expect(config.integrations).toEqual([]);
+    expect(config.skillsDir).toBe("/path/to/skills");
   });
 
   it("throws on unknown integration ID", () => {
@@ -151,6 +161,19 @@ describe("parseConfig", () => {
 
   it("built-in catalog is empty", () => {
     expect(Object.keys(BUILT_IN_MCP_SERVERS)).toHaveLength(0);
+  });
+
+  it("includes skillsDir when SKILLS_DIR is set", () => {
+    const config = parseConfig(
+      testCatalog,
+      makeEnv({ SKILLS_DIR: "/opt/skills" })
+    );
+    expect(config.skillsDir).toBe("/opt/skills");
+  });
+
+  it("sets skillsDir to null when SKILLS_DIR is not set", () => {
+    const config = parseConfig(testCatalog, makeEnv());
+    expect(config.skillsDir).toBeNull();
   });
 
   it("rejects integrations not in catalog", () => {

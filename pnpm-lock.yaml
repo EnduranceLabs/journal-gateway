@@ -54,12 +54,34 @@ importers:
       '@journal/gateway':
         specifier: workspace:*
         version: link:../gateway
+      '@journal/skills':
+        specifier: workspace:*
+        version: link:../skills
       '@modelcontextprotocol/sdk':
         specifier: ^1.12
         version: 1.26.0(zod@3.25.76)
       zod:
         specifier: ^3.24
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.19.11
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^3
+        version: 3.2.4(@types/node@22.19.11)
+
+  packages/skills:
+    dependencies:
+      '@journal-edge/types':
+        specifier: workspace:*
+        version: link:../types
+      '@journal/gateway':
+        specifier: workspace:*
+        version: link:../gateway
     devDependencies:
       '@types/node':
         specifier: ^22

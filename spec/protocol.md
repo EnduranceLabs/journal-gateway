@@ -73,12 +73,13 @@ Sent immediately after the WebSocket connection opens.
 
 #### `register`
 
-Sent after successful authentication. Declares all available integrations and their tools.
+Sent after successful authentication. Declares all available integrations, their tools, and optionally any skills.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | `"register"` | yes | Message discriminator |
 | `integrations` | `Integration[]` | yes | Array of integration registrations |
+| `skills` | `Skill[]` | no | Array of skill registrations (see [skills.md](./skills.md)) |
 
 ```json
 {
@@ -102,6 +103,18 @@ Sent after successful authentication. Declares all available integrations and th
           }
         }
       ]
+    }
+  ],
+  "skills": [
+    {
+      "id": "review-pr",
+      "name": "Review PR",
+      "description": "Reviews a pull request for code quality",
+      "instructions": "You are reviewing a pull request. Follow these steps...",
+      "metadata": {
+        "tags": ["code-review", "git"],
+        "category": "development"
+      }
     }
   ]
 }
@@ -200,19 +213,21 @@ Sent when authentication fails.
 
 #### `registered`
 
-Sent after successful integration registration.
+Sent after successful registration.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | `"registered"` | yes | Message discriminator |
 | `integrationCount` | `number` | yes | Number of registered integrations |
 | `toolCount` | `number` | yes | Total number of registered tools |
+| `skillCount` | `number` | no | Number of registered skills |
 
 ```json
 {
   "type": "registered",
   "integrationCount": 1,
-  "toolCount": 2
+  "toolCount": 2,
+  "skillCount": 1
 }
 ```
 
@@ -299,6 +314,20 @@ Discriminated union on `type`.
 | `type` | `"image"` | yes | Content kind |
 | `data` | `string` | yes | Base64-encoded image data |
 | `mimeType` | `string` | yes | Image MIME type (e.g. `image/png`) |
+
+### Skill
+
+A prompt/workflow template that guides agent behavior. Unlike integrations (which provide callable tools), skills provide instructions that shape how the agent approaches a task. See [skills.md](./skills.md) for the full specification.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `string` | yes | Unique identifier (derived from filename) |
+| `name` | `string` | yes | Display name |
+| `description` | `string` | yes | What the skill does |
+| `instructions` | `string` | yes | Prompt instructions for the agent |
+| `metadata` | `object` | no | Optional tags and category |
+| `metadata.tags` | `string[]` | no | Categorization tags |
+| `metadata.category` | `string` | no | Skill category |
 
 ### GatewayError
 

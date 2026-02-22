@@ -47,6 +47,23 @@ describe("Gateway → Service messages", () => {
     expect(RegisterMessageSchema.parse(msg)).toEqual(msg);
   });
 
+  it("parses register message with skills", () => {
+    const msg = {
+      type: "register",
+      integrations: [],
+      skills: [
+        {
+          id: "review-pr",
+          name: "Review PR",
+          description: "Reviews a pull request",
+          instructions: "Follow these steps to review...",
+          metadata: { tags: ["git"], category: "development" },
+        },
+      ],
+    };
+    expect(RegisterMessageSchema.parse(msg)).toEqual(msg);
+  });
+
   it("parses tool_result message", () => {
     const msg = {
       type: "tool_result",
@@ -167,6 +184,16 @@ describe("Service → Gateway messages", () => {
       type: "registered",
       integrationCount: 2,
       toolCount: 5,
+    };
+    expect(RegisteredMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses registered message with skillCount", () => {
+    const msg = {
+      type: "registered",
+      integrationCount: 1,
+      toolCount: 3,
+      skillCount: 2,
     };
     expect(RegisteredMessageSchema.parse(msg)).toEqual(msg);
   });

@@ -5,7 +5,7 @@ import {
   type ServiceMessage,
   type GatewayErrorCode,
 } from "@journal-edge/types";
-import type { IntegrationProvider, GatewayConfig } from "./types.js";
+import type { IntegrationProvider, SkillProvider, GatewayConfig } from "./types.js";
 import { IntegrationNotFoundError } from "./types.js";
 import { Logger } from "./logger.js";
 import { VERSION } from "./version.js";
@@ -28,7 +28,8 @@ export class GatewayConnection {
 
   constructor(
     private config: GatewayConfig,
-    private provider: IntegrationProvider
+    private provider: IntegrationProvider,
+    private skillProvider?: SkillProvider
   ) {
     this.logger = new Logger(config.logLevel);
   }
@@ -90,7 +91,14 @@ export class GatewayConnection {
             });
 
             const integrations = await this.provider.getRegistrations();
-            this.send({ type: "register", integrations });
+            const skills = this.skillProvider
+              ? await this.skillProvider.getSkills()
+              : undefined;
+            this.send({
+              type: "register",
+              integrations,
+              ...(skills?.length ? { skills } : {}),
+            });
 
             registerTimer = setTimeout(() => {
               if (!registered) {
@@ -118,6 +126,7 @@ export class GatewayConnection {
             this.logger.info("Integrations registered", {
               integrationCount: msg.integrationCount,
               toolCount: msg.toolCount,
+              ...(msg.skillCount != null ? { skillCount: msg.skillCount } : {}),
             });
             resolve();
             break;

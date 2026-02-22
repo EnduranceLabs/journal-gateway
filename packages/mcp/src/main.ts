@@ -4,6 +4,7 @@ import { parseConfig } from "./config.js";
 import { BUILT_IN_MCP_SERVERS } from "./integrations/index.js";
 import { McpRuntime } from "./mcp-runtime.js";
 import { GatewayConnection, Logger } from "@journal/gateway";
+import { SkillLoader } from "@journal/skills";
 
 async function main(): Promise<void> {
   const config = parseConfig(BUILT_IN_MCP_SERVERS);
@@ -12,12 +13,16 @@ async function main(): Promise<void> {
   logger.info("Starting Journal Gateway", {
     integrations: config.integrations,
     url: config.url,
+    ...(config.skillsDir ? { skillsDir: config.skillsDir } : {}),
   });
 
   const runtime = new McpRuntime(config);
   await runtime.start();
 
-  const connection = new GatewayConnection(config, runtime);
+  const skillLoader = new SkillLoader(config.skillsDir, logger);
+  await skillLoader.load();
+
+  const connection = new GatewayConnection(config, runtime, skillLoader);
   await connection.connect();
 
   logger.info("Journal Gateway is running");

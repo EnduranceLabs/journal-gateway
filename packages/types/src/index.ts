@@ -6,6 +6,8 @@ export {
   type GatewayErrorCode,
 } from "./errors.js";
 
+export { SkillSchema, type Skill } from "./skills.js";
+
 export {
   ToolDefinitionSchema,
   McpServerIntegrationSchema,
