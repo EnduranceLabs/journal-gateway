@@ -71,7 +71,7 @@ The gateway core (`packages/gateway/`) is a stable, minimal library that handles
 
 ## Protocol
 
-The gateway communicates with Journal over WebSocket using a simple JSON protocol. See [protocol/README.md](./protocol/README.md) for the full specification.
+The gateway communicates with Journal over WebSocket using a simple JSON protocol. See [spec/protocol.md](./spec/protocol.md) for the full specification.
 
 ## Development
 
