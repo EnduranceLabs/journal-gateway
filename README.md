@@ -49,10 +49,10 @@ No built-in integrations are included yet. See `packages/mcp/src/integrations/` 
 docker build -f packaging/docker/Dockerfile -t journal-gateway .
 
 # npm publish
-./scripts/publish-npm.sh
+./packaging/npm/publish.sh
 
 # Docker publish
-./scripts/publish-docker.sh
+./packaging/docker/publish.sh
 ```
 
 ## Skills
