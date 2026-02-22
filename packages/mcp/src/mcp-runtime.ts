@@ -1,48 +1,49 @@
 import type { Integration, ToolResult } from "@journal-edge/types";
-import type { GatewayConfig } from "./config.js";
+import type { IntegrationProvider } from "@journal/gateway";
+import { IntegrationNotFoundError, Logger } from "@journal/gateway";
+import type { McpConfig } from "./config.js";
 import { McpProcess } from "./mcp-process.js";
-import { Logger } from "./logger.js";
 
-export class ToolRuntime {
+export class McpRuntime implements IntegrationProvider {
   private processes = new Map<string, McpProcess>();
   private logger: Logger;
 
-  constructor(private config: GatewayConfig) {
+  constructor(private config: McpConfig) {
     this.logger = new Logger(config.logLevel);
   }
 
   async start(): Promise<void> {
-    this.logger.info("Starting tool runtime", {
+    this.logger.info("Starting MCP runtime", {
       integrations: this.config.integrations,
     });
 
     for (const definition of this.config.mcpServers) {
       const env = this.config.mcpEnvVars.get(definition.id) ?? {};
-      const process = new McpProcess(definition, env, this.logger);
+      const mcpProcess = new McpProcess(definition, env, this.logger);
 
-      process.on("crash", (error) => {
+      mcpProcess.on("crash", (error) => {
         this.logger.error(`Integration "${definition.id}" crashed`, {
           error: error.message,
         });
       });
 
-      await process.start();
-      this.processes.set(definition.id, process);
+      await mcpProcess.start();
+      this.processes.set(definition.id, mcpProcess);
     }
 
-    this.logger.info("Tool runtime started", {
+    this.logger.info("MCP runtime started", {
       integrationCount: this.processes.size,
     });
   }
 
-  async getRegistration(): Promise<Integration[]> {
+  async getRegistrations(): Promise<Integration[]> {
     const registrations: Integration[] = [];
 
     for (const definition of this.config.mcpServers) {
-      const process = this.processes.get(definition.id);
-      if (!process || !process.isRunning()) continue;
+      const mcpProcess = this.processes.get(definition.id);
+      if (!mcpProcess || !mcpProcess.isRunning()) continue;
 
-      const tools = await process.listTools();
+      const tools = await mcpProcess.listTools();
       registrations.push({
         type: "mcp_server",
         id: definition.id,
@@ -60,29 +61,22 @@ export class ToolRuntime {
     toolName: string,
     args: Record<string, unknown>
   ): Promise<ToolResult> {
-    const process = this.processes.get(integrationId);
-    if (!process) {
+    const mcpProcess = this.processes.get(integrationId);
+    if (!mcpProcess) {
       throw new IntegrationNotFoundError(integrationId);
     }
-    if (!process.isRunning()) {
+    if (!mcpProcess.isRunning()) {
       throw new IntegrationNotFoundError(integrationId, "Integration process is not running");
     }
 
-    return process.callTool(toolName, args);
+    return mcpProcess.callTool(toolName, args);
   }
 
   async stop(): Promise<void> {
-    this.logger.info("Stopping tool runtime");
+    this.logger.info("Stopping MCP runtime");
     const stops = Array.from(this.processes.values()).map((p) => p.stop());
     await Promise.allSettled(stops);
     this.processes.clear();
-    this.logger.info("Tool runtime stopped");
-  }
-}
-
-export class IntegrationNotFoundError extends Error {
-  constructor(integrationId: string, detail?: string) {
-    super(detail ?? `Integration "${integrationId}" is not registered on this gateway`);
-    this.name = "IntegrationNotFoundError";
+    this.logger.info("MCP runtime stopped");
   }
 }

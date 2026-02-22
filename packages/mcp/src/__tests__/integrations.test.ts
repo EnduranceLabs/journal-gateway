@@ -6,7 +6,7 @@ import {
   sentry,
   langfuse,
   clickhouse,
-} from "../mcp-servers/index.js";
+} from "../integrations/index.js";
 
 describe("BUILT_IN_MCP_SERVERS catalog", () => {
   it("has all expected built-in integrations", () => {

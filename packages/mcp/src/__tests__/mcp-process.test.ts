@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { McpProcess } from "../mcp-process.js";
-import { Logger } from "../logger.js";
+import { Logger } from "@journal/gateway";
 import type { McpServerConfig } from "../config.js";
 
 // Mock @modelcontextprotocol/sdk

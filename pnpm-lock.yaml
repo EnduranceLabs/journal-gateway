@@ -26,9 +26,6 @@ importers:
       '@journal-edge/types':
         specifier: workspace:*
         version: link:../types
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.12
-        version: 1.26.0(zod@3.25.76)
       ws:
         specifier: ^8
         version: 8.19.0
@@ -39,6 +36,28 @@ importers:
       '@types/ws':
         specifier: ^8
         version: 8.18.1
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
+      vitest:
+        specifier: ^3
+        version: 3.2.4(@types/node@25.3.0)
+
+  packages/mcp:
+    dependencies:
+      '@journal-edge/types':
+        specifier: workspace:*
+        version: link:../types
+      '@journal/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.12
+        version: 1.26.0(zod@3.25.76)
+      zod:
+        specifier: ^3.24
+        version: 3.25.76
+    devDependencies:
       typescript:
         specifier: ^5.7
         version: 5.9.3

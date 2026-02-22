@@ -5,8 +5,8 @@ import {
   type ServiceMessage,
   type GatewayErrorCode,
 } from "@journal-edge/types";
-import type { GatewayConfig } from "./config.js";
-import { ToolRuntime, IntegrationNotFoundError } from "./tool-runtime.js";
+import type { IntegrationProvider, GatewayConfig } from "./types.js";
+import { IntegrationNotFoundError } from "./types.js";
 import { Logger } from "./logger.js";
 import { VERSION } from "./version.js";
 
@@ -28,7 +28,7 @@ export class GatewayConnection {
 
   constructor(
     private config: GatewayConfig,
-    private runtime: ToolRuntime
+    private provider: IntegrationProvider
   ) {
     this.logger = new Logger(config.logLevel);
   }
@@ -89,7 +89,7 @@ export class GatewayConnection {
               organizationName: msg.organizationName,
             });
 
-            const integrations = await this.runtime.getRegistration();
+            const integrations = await this.provider.getRegistrations();
             this.send({ type: "register", integrations });
 
             registerTimer = setTimeout(() => {
@@ -169,7 +169,7 @@ export class GatewayConnection {
 
     try {
       const result = await Promise.race([
-        this.runtime.callTool(integrationId, toolName, args),
+        this.provider.callTool(integrationId, toolName, args),
         timeout,
       ]);
 

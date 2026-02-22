@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GatewayConnection } from "../connection.js";
-import type { GatewayConfig } from "../config.js";
-import { ToolRuntime } from "../tool-runtime.js";
+import type { GatewayConfig, IntegrationProvider } from "../types.js";
 import { EventEmitter } from "node:events";
 
 // Mock ws
@@ -36,48 +35,38 @@ vi.mock("ws", () => {
   return { default: ctor };
 });
 
-// Mock ToolRuntime
-vi.mock("../tool-runtime.js", () => {
-  return {
-    ToolRuntime: vi.fn().mockImplementation(() => ({
-      getRegistration: vi.fn().mockResolvedValue([
-        {
-          type: "mcp_server",
-          id: "postgresql",
-          name: "PostgreSQL",
-          description: "Query databases",
-          tools: [
-            {
-              name: "query",
-              description: "Run SQL",
-              inputSchema: { type: "object" },
-            },
-          ],
-        },
-      ]),
-      callTool: vi.fn().mockResolvedValue({
-        content: [{ type: "text", text: "result" }],
-      }),
-    })),
-    IntegrationNotFoundError: class IntegrationNotFoundError extends Error {
-      constructor(msg: string) {
-        super(msg);
-        this.name = "IntegrationNotFoundError";
-      }
-    },
-  };
-});
-
 let mockWsInstances: MockWebSocket[] = [];
 
 const config: GatewayConfig = {
   token: "gw_test123",
   url: "wss://localhost/v1",
-  integrations: ["postgresql"],
   logLevel: "error",
-  mcpServers: [],
-  mcpEnvVars: new Map(),
 };
+
+function createMockProvider(): IntegrationProvider {
+  return {
+    getRegistrations: vi.fn().mockResolvedValue([
+      {
+        type: "mcp_server",
+        id: "postgresql",
+        name: "PostgreSQL",
+        description: "Query databases",
+        tools: [
+          {
+            name: "query",
+            description: "Run SQL",
+            inputSchema: { type: "object" },
+          },
+        ],
+      },
+    ]),
+    callTool: vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "result" }],
+    }),
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+  };
+}
 
 describe("GatewayConnection", () => {
   beforeEach(() => {
@@ -90,8 +79,8 @@ describe("GatewayConnection", () => {
   });
 
   it("completes full connection lifecycle", async () => {
-    const runtime = new ToolRuntime(config);
-    const conn = new GatewayConnection(config, runtime);
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
 
     const connectPromise = conn.connect();
 
@@ -132,8 +121,8 @@ describe("GatewayConnection", () => {
   });
 
   it("handles auth error", async () => {
-    const runtime = new ToolRuntime(config);
-    const conn = new GatewayConnection(config, runtime);
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
 
     const connectPromise = conn.connect();
 
@@ -149,8 +138,8 @@ describe("GatewayConnection", () => {
   });
 
   it("responds to ping with pong", async () => {
-    const runtime = new ToolRuntime(config);
-    const conn = new GatewayConnection(config, runtime);
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
 
     const connectPromise = conn.connect();
 
@@ -182,8 +171,8 @@ describe("GatewayConnection", () => {
   });
 
   it("handles tool_call and sends tool_result", async () => {
-    const runtime = new ToolRuntime(config);
-    const conn = new GatewayConnection(config, runtime);
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
 
     const connectPromise = conn.connect();
 
@@ -225,8 +214,8 @@ describe("GatewayConnection", () => {
   });
 
   it("ignores invalid messages gracefully", async () => {
-    const runtime = new ToolRuntime(config);
-    const conn = new GatewayConnection(config, runtime);
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
 
     const connectPromise = conn.connect();
 

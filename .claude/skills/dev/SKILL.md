@@ -11,7 +11,7 @@ user-invocable: false
 All commands run from the repository root via Turborepo:
 
 ```bash
-pnpm build       # Build all packages (types first, then gateway)
+pnpm build       # Build all packages (types → gateway → mcp)
 pnpm test        # Run all tests with vitest
 pnpm typecheck   # TypeScript type checking across all packages
 ```
@@ -20,12 +20,13 @@ pnpm typecheck   # TypeScript type checking across all packages
 
 ```
 packages/
-  types/     # @journal/types — Zod schemas, TypeScript types, protocol definitions
-  gateway/   # @journal/gateway — Gateway runtime (depends on @journal/types)
+  types/     # @journal-edge/types — Zod schemas, TypeScript types, protocol definitions
+  gateway/   # @journal/gateway — Core connection library (depends on @journal-edge/types)
+  mcp/       # @journal/mcp — MCP integration provider + CLI (depends on gateway + types)
 protocol/    # Protocol specification (JSON Schema + README)
 ```
 
-**Build order matters:** `packages/types` must build before `packages/gateway` because gateway imports from `@journal/types`. Turborepo handles this automatically via `pnpm build`.
+**Build order matters:** `packages/types` → `packages/gateway` → `packages/mcp`. Turborepo handles this automatically via `pnpm build`.
 
 ## Package Details
 
@@ -39,14 +40,21 @@ Protocol types defined with Zod schemas. Source files:
 
 ### `packages/gateway`
 
-Gateway runtime. Source files:
-- `src/config.ts` — `McpServerConfig` interface and `parseConfig` with Zod validation
-- `src/mcp-servers/` — Built-in MCP server catalog (one file per integration, barrel-exported via `mcp-servers/index.ts`)
-- `src/mcp-process.ts` — Spawns MCP server subprocesses via `@modelcontextprotocol/sdk`
-- `src/tool-runtime.ts` — Manages integration lifecycle (start, list tools, call tools)
+Core connection library. Stable, minimal — no MCP code. Source files:
+- `src/types.ts` — `IntegrationProvider` interface, `GatewayConfig`, `IntegrationNotFoundError`
 - `src/connection.ts` — WebSocket connection to Journal service with reconnection
 - `src/logger.ts` — Structured JSON logger
-- `src/index.ts` — Entry point
+- `src/version.ts` — Package version loader
+- `src/index.ts` — Re-exports everything
+
+### `packages/mcp`
+
+MCP integration provider and CLI entry point. Source files:
+- `src/config.ts` — `McpServerConfig` interface and `parseConfig` with Zod validation
+- `src/integrations/` — Built-in MCP server catalog (one file per integration, barrel-exported)
+- `src/mcp-process.ts` — Spawns MCP server subprocesses via `@modelcontextprotocol/sdk`
+- `src/mcp-runtime.ts` — `McpRuntime` implements `IntegrationProvider` (manages integration lifecycle)
+- `src/main.ts` — CLI entry point
 
 ## Testing Patterns
 
@@ -55,6 +63,7 @@ Tests use **vitest**. Run a single package's tests:
 ```bash
 cd packages/types && pnpm test
 cd packages/gateway && pnpm test
+cd packages/mcp && pnpm test
 ```
 
 ### Mocking conventions

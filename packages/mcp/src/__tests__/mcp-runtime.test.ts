@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ToolRuntime, IntegrationNotFoundError } from "../tool-runtime.js";
-import type { GatewayConfig } from "../config.js";
-import { BUILT_IN_MCP_SERVERS } from "../mcp-servers/index.js";
+import { McpRuntime } from "../mcp-runtime.js";
+import { IntegrationNotFoundError } from "@journal/gateway";
+import type { McpConfig } from "../config.js";
+import { BUILT_IN_MCP_SERVERS } from "../integrations/index.js";
 
 // Mock McpProcess
 vi.mock("../mcp-process.js", () => {
@@ -26,7 +27,7 @@ vi.mock("../mcp-process.js", () => {
   };
 });
 
-function makeConfig(integrations: string[] = ["postgresql"]): GatewayConfig {
+function makeConfig(integrations: string[] = ["postgresql"]): McpConfig {
   return {
     token: "gw_test",
     url: "wss://localhost/v1",
@@ -39,29 +40,29 @@ function makeConfig(integrations: string[] = ["postgresql"]): GatewayConfig {
   };
 }
 
-describe("ToolRuntime", () => {
+describe("McpRuntime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("starts all configured integrations", async () => {
-    const runtime = new ToolRuntime(makeConfig(["postgresql"]));
+    const runtime = new McpRuntime(makeConfig(["postgresql"]));
     await runtime.start();
-    const registrations = await runtime.getRegistration();
+    const registrations = await runtime.getRegistrations();
     expect(registrations).toHaveLength(1);
     expect(registrations[0].id).toBe("postgresql");
   });
 
   it("generates registration payload with tools", async () => {
-    const runtime = new ToolRuntime(makeConfig(["postgresql"]));
+    const runtime = new McpRuntime(makeConfig(["postgresql"]));
     await runtime.start();
-    const registrations = await runtime.getRegistration();
+    const registrations = await runtime.getRegistrations();
     expect(registrations[0].tools).toHaveLength(1);
     expect(registrations[0].tools[0].name).toBe("query");
   });
 
   it("routes tool call to correct integration", async () => {
-    const runtime = new ToolRuntime(makeConfig(["postgresql"]));
+    const runtime = new McpRuntime(makeConfig(["postgresql"]));
     await runtime.start();
     const result = await runtime.callTool("postgresql", "query", {
       sql: "SELECT 1",
@@ -70,7 +71,7 @@ describe("ToolRuntime", () => {
   });
 
   it("throws IntegrationNotFoundError for unknown integration", async () => {
-    const runtime = new ToolRuntime(makeConfig(["postgresql"]));
+    const runtime = new McpRuntime(makeConfig(["postgresql"]));
     await runtime.start();
     await expect(
       runtime.callTool("unknown", "query", {})
@@ -78,7 +79,7 @@ describe("ToolRuntime", () => {
   });
 
   it("stops all processes", async () => {
-    const runtime = new ToolRuntime(makeConfig(["postgresql"]));
+    const runtime = new McpRuntime(makeConfig(["postgresql"]));
     await runtime.start();
     await runtime.stop();
     // No error means success — processes were stopped
@@ -89,9 +90,9 @@ describe("ToolRuntime", () => {
     // Add a second integration definition
     config.integrations = ["postgresql"];
     config.mcpServers = [BUILT_IN_MCP_SERVERS.postgresql];
-    const runtime = new ToolRuntime(config);
+    const runtime = new McpRuntime(config);
     await runtime.start();
-    const registrations = await runtime.getRegistration();
+    const registrations = await runtime.getRegistrations();
     expect(registrations).toHaveLength(1);
   });
 });

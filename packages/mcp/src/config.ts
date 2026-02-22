@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GatewayConfig } from "@journal/gateway";
 
 export interface McpServerConfig {
   id: string;
@@ -10,22 +11,23 @@ export interface McpServerConfig {
   envVars: Record<string, string>;
 }
 
-const GatewayConfigSchema = z.object({
+export type McpConfig = GatewayConfig & {
+  integrations: string[];
+  mcpServers: McpServerConfig[];
+  mcpEnvVars: Map<string, Record<string, string>>;
+};
+
+const McpConfigSchema = z.object({
   token: z.string().min(1, "JOURNAL_GATEWAY_TOKEN is required"),
   url: z.string().url(),
   integrations: z.array(z.string()).min(1, "At least one integration must be specified"),
   logLevel: z.enum(["debug", "info", "warn", "error"]),
 });
 
-export type GatewayConfig = z.infer<typeof GatewayConfigSchema> & {
-  mcpServers: McpServerConfig[];
-  mcpEnvVars: Map<string, Record<string, string>>;
-};
-
 export function parseConfig(
   catalog: Record<string, McpServerConfig>,
   env: Record<string, string | undefined> = process.env
-): GatewayConfig {
+): McpConfig {
   const token = env.JOURNAL_GATEWAY_TOKEN ?? "";
   const url = env.JOURNAL_GATEWAY_URL ?? "wss://gateway.journal.one/v1";
   const integrationsRaw = env.INTEGRATIONS ?? "";
@@ -40,7 +42,7 @@ export function parseConfig(
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const base = GatewayConfigSchema.parse({ token, url, integrations, logLevel });
+  const base = McpConfigSchema.parse({ token, url, integrations, logLevel });
 
   const mcpServers: McpServerConfig[] = [];
   const mcpEnvVars = new Map<string, Record<string, string>>();

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseConfig } from "../config.js";
 import type { McpServerConfig } from "../config.js";
-import { BUILT_IN_MCP_SERVERS } from "../mcp-servers/index.js";
+import { BUILT_IN_MCP_SERVERS } from "../integrations/index.js";
 
 function makeEnv(overrides: Record<string, string> = {}): Record<string, string> {
   return {

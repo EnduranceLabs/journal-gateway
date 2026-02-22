@@ -1,13 +1,16 @@
 {
-  "name": "@journal/gateway",
+  "name": "@journal/mcp",
   "version": "0.1.0",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "bin": {
+    "journal-gateway": "./dist/main.js"
+  },
+  "main": "./dist/main.js",
+  "types": "./dist/main.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/main.js",
+      "types": "./dist/main.d.ts"
     }
   },
   "scripts": {
@@ -17,11 +20,11 @@
   },
   "dependencies": {
     "@journal-edge/types": "workspace:*",
-    "ws": "^8",
+    "@journal/gateway": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12",
     "zod": "^3.24"
   },
   "devDependencies": {
-    "@types/ws": "^8",
     "typescript": "^5.7",
     "vitest": "^3"
   }

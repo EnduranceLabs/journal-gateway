@@ -7,7 +7,7 @@ Connect your tools to the [Journal](https://journal.one) agent. Deploy a gateway
 ### npm
 
 ```bash
-npm install -g @journal/gateway
+npm install -g @journal/mcp
 
 JOURNAL_GATEWAY_TOKEN=gw_your_token \
   INTEGRATIONS=postgresql \
@@ -55,27 +55,16 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token \
   journal-gateway
 ```
 
-## Protocol
+## Architecture
 
-The gateway communicates with Journal over WebSocket using a simple JSON protocol. See [protocol/README.md](./protocol/README.md) for the full specification.
-
-## Development
-
-```bash
-# Install dependencies
-pnpm install
-
-# Build all packages
-pnpm build
-
-# Type check
-pnpm typecheck
-
-# Run tests
-pnpm test
+```
+packages/
+  types/     # Protocol types (Zod schemas) — stable
+  gateway/   # Core connection library (IntegrationProvider interface) — stable
+  mcp/       # MCP integration provider + CLI entry point
 ```
 
-## Architecture
+The gateway core (`packages/gateway/`) is a stable, minimal library that handles WebSocket connections and tool routing via a generic `IntegrationProvider` interface. The MCP implementation (`packages/mcp/`) provides the concrete integration by spawning MCP server subprocesses.
 
 ```
 ┌─────────────────────────────────────┐
@@ -94,6 +83,26 @@ pnpm test
                     │   Journal    │
                     │   Service    │
                     └──────────────┘
+```
+
+## Protocol
+
+The gateway communicates with Journal over WebSocket using a simple JSON protocol. See [protocol/README.md](./protocol/README.md) for the full specification.
+
+## Development
+
+```bash
+# Install dependencies
+pnpm install
+
+# Build all packages
+pnpm build
+
+# Type check
+pnpm typecheck
+
+# Run tests
+pnpm test
 ```
 
 ## License

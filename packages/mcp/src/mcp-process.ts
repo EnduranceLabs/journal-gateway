@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { McpServerConfig } from "./config.js";
 import type { ToolDefinition, ToolResult, ContentBlock } from "@journal-edge/types";
-import { Logger } from "./logger.js";
+import { Logger } from "@journal/gateway";
 import { EventEmitter } from "node:events";
 
 export interface McpProcessEvents {

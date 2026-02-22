@@ -9,11 +9,11 @@ argument-hint: "[integration-id]"
 
 Follow these steps to add a new MCP integration to the gateway.
 
-## 1. Create an MCP server config file in `src/mcp-servers/`
+## 1. Create an MCP server config file in `packages/mcp/src/integrations/`
 
-Create a new file at `packages/gateway/src/mcp-servers/<integration-id>.ts` with a single exported `McpServerConfig`.
+Create a new file at `packages/mcp/src/integrations/<integration-id>.ts` with a single exported `McpServerConfig`.
 
-Each entry must conform to the `McpServerConfig` interface (defined in `packages/gateway/src/config.ts`):
+Each entry must conform to the `McpServerConfig` interface (defined in `packages/mcp/src/config.ts`):
 
 ```ts
 export interface McpServerConfig {
@@ -29,7 +29,7 @@ export interface McpServerConfig {
 
 The `envVars` object maps **our env var name** (the key the gateway reads from `process.env`) to the **child process env var name** (the key passed to the MCP server subprocess). They are often the same but can differ (e.g., `RAILWAY_TOKEN` -> `RAILWAY_API_TOKEN`).
 
-Example file (`packages/gateway/src/mcp-servers/myservice.ts`):
+Example file (`packages/mcp/src/integrations/myservice.ts`):
 
 ```ts
 import type { McpServerConfig } from "../config.js";
@@ -47,7 +47,7 @@ export const myservice: McpServerConfig = {
 
 ## 2. Register in the barrel export
 
-Open `packages/gateway/src/mcp-servers/index.ts` and:
+Open `packages/mcp/src/integrations/index.ts` and:
 
 1. Import and re-export the new integration module
 2. Add the integration to the `BUILT_IN_MCP_SERVERS` record
@@ -61,9 +61,9 @@ Verify the error message reads correctly by mentally running through:
 
 ## 4. Add tests
 
-Open `packages/gateway/src/__tests__/mcp-servers.test.ts` and add the new integration ID to the `expectedIntegrations` array.
+Open `packages/mcp/src/__tests__/integrations.test.ts` and add the new integration ID to the `expectedIntegrations` array.
 
-Open `packages/gateway/src/__tests__/config.test.ts` and add:
+Open `packages/mcp/src/__tests__/config.test.ts` and add:
 
 1. **An env var resolution test** (if the integration has env vars). Follow the pattern of existing tests like the `langfuse` test:
 
@@ -120,8 +120,8 @@ pnpm typecheck     # Verify types compile
 
 ## Key files
 
-- `packages/gateway/src/mcp-servers/` — Individual MCP server configs and barrel export
-- `packages/gateway/src/config.ts` — `McpServerConfig` interface and `parseConfig`
-- `packages/gateway/src/__tests__/config.test.ts` — config validation tests (uses `makeEnv` helper)
-- `packages/gateway/src/__tests__/mcp-servers.test.ts` — MCP server catalog tests
+- `packages/mcp/src/integrations/` — Individual MCP server configs and barrel export
+- `packages/mcp/src/config.ts` — `McpServerConfig` interface and `parseConfig`
+- `packages/mcp/src/__tests__/config.test.ts` — config validation tests (uses `makeEnv` helper)
+- `packages/mcp/src/__tests__/integrations.test.ts` — MCP server catalog tests
 - `README.md` — Available Integrations table
