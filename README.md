@@ -37,23 +37,7 @@ All configuration is via environment variables.
 
 ## Available Integrations
 
-| Integration ID | Description | Required Env Vars |
-|----------------|-------------|-------------------|
-| `clickhouse` | Query ClickHouse | `CLICKHOUSE_URL`, `CLICKHOUSE_USERNAME`, `CLICKHOUSE_PASSWORD` |
-| `langfuse` | Access Langfuse data | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` |
-| `postgresql` | Query PostgreSQL databases | `DATABASE_URL` |
-| `railway` | Manage Railway services | `RAILWAY_TOKEN` |
-| `sentry` | Query Sentry errors | `SENTRY_AUTH_TOKEN` |
-
-### Multiple Integrations
-
-```bash
-JOURNAL_GATEWAY_TOKEN=gw_your_token \
-  INTEGRATIONS=postgresql,sentry \
-  DATABASE_URL=postgresql://localhost:5432/mydb \
-  SENTRY_AUTH_TOKEN=your_sentry_token \
-  journal-gateway
-```
+No built-in integrations are included yet. See `packages/mcp/src/integrations/` to add new ones.
 
 ## Architecture
 
