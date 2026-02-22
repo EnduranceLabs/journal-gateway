@@ -1,0 +1,39 @@
+{
+  "_description": "Examples of tool_result and tool_error responses",
+  "success_result": {
+    "type": "tool_result",
+    "requestId": "req_def456",
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Query executed successfully. 15 rows returned."
+        }
+      ]
+    }
+  },
+  "error_result": {
+    "type": "tool_error",
+    "requestId": "req_ghi789",
+    "error": {
+      "code": "EXECUTION_FAILED",
+      "message": "relation \"nonexistent_table\" does not exist"
+    }
+  },
+  "timeout_error": {
+    "type": "tool_error",
+    "requestId": "req_jkl012",
+    "error": {
+      "code": "TIMEOUT",
+      "message": "Tool execution exceeded 60s timeout"
+    }
+  },
+  "skill_not_found": {
+    "type": "tool_error",
+    "requestId": "req_mno345",
+    "error": {
+      "code": "SKILL_NOT_FOUND",
+      "message": "Skill 'unknown_skill' is not registered on this gateway"
+    }
+  }
+}

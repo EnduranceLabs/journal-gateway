@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://journal.one/schemas/gateway/errors.schema.json",
+  "title": "Journal Gateway Error Types",
+  "description": "Error types used in the gateway protocol",
+
+  "$defs": {
+    "GatewayErrorCode": {
+      "type": "string",
+      "enum": ["SKILL_NOT_FOUND", "TOOL_NOT_FOUND", "EXECUTION_FAILED", "TIMEOUT"],
+      "description": "Gateway error codes"
+    },
+
+    "GatewayError": {
+      "type": "object",
+      "description": "A gateway error with code and message",
+      "properties": {
+        "code": { "$ref": "#/$defs/GatewayErrorCode" },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message"
+        }
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false
+    }
+  }
+}

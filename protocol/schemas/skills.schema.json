@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://journal.one/schemas/gateway/skills.schema.json",
+  "title": "Journal Gateway Skill Definitions",
+  "description": "Skill, tool, and result type definitions for the gateway protocol",
+
+  "$defs": {
+    "ToolDefinition": {
+      "type": "object",
+      "description": "A tool exposed by a skill",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Tool name (unique within a skill)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what the tool does"
+        },
+        "inputSchema": {
+          "type": "object",
+          "description": "JSON Schema describing the tool's input parameters"
+        }
+      },
+      "required": ["name", "description", "inputSchema"],
+      "additionalProperties": false
+    },
+
+    "McpServerSkill": {
+      "type": "object",
+      "description": "A skill backed by an MCP server process",
+      "properties": {
+        "type": { "const": "mcp_server" },
+        "id": {
+          "type": "string",
+          "description": "Unique skill identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable skill name"
+        },
+        "description": {
+          "type": "string",
+          "description": "What this skill provides"
+        },
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ToolDefinition" },
+          "description": "Tools exposed by this skill"
+        }
+      },
+      "required": ["type", "id", "name", "description", "tools"],
+      "additionalProperties": false
+    },
+
+    "AgentSkill": {
+      "type": "object",
+      "description": "A skill backed by an agent",
+      "properties": {
+        "type": { "const": "agent_skill" },
+        "id": {
+          "type": "string",
+          "description": "Unique skill identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable skill name"
+        },
+        "description": {
+          "type": "string",
+          "description": "What this skill provides"
+        },
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ToolDefinition" },
+          "description": "Tools exposed by this skill"
+        }
+      },
+      "required": ["type", "id", "name", "description", "tools"],
+      "additionalProperties": false
+    },
+
+    "SkillRegistration": {
+      "description": "A skill registration, discriminated on the type field",
+      "oneOf": [
+        { "$ref": "#/$defs/McpServerSkill" },
+        { "$ref": "#/$defs/AgentSkill" }
+      ]
+    },
+
+    "TextContent": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "text" },
+        "text": {
+          "type": "string",
+          "description": "Text content"
+        }
+      },
+      "required": ["type", "text"],
+      "additionalProperties": false
+    },
+
+    "ImageContent": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "image" },
+        "data": {
+          "type": "string",
+          "description": "Base64-encoded image data"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "Image MIME type (e.g., image/png)"
+        }
+      },
+      "required": ["type", "data", "mimeType"],
+      "additionalProperties": false
+    },
+
+    "Content": {
+      "description": "A content block in a tool result",
+      "oneOf": [
+        { "$ref": "#/$defs/TextContent" },
+        { "$ref": "#/$defs/ImageContent" }
+      ]
+    },
+
+    "ToolResult": {
+      "type": "object",
+      "description": "Result of a tool execution",
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Content" },
+          "description": "Result content blocks"
+        },
+        "isError": {
+          "type": "boolean",
+          "description": "Whether the result represents an error"
+        }
+      },
+      "required": ["content"],
+      "additionalProperties": false
+    }
+  }
+}

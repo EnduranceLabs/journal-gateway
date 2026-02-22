@@ -1,0 +1,18 @@
+{
+  "_description": "Gateway sends authenticate after WebSocket opens, service responds with authenticated",
+  "gateway_sends": {
+    "type": "authenticate",
+    "token": "gw_abc123def456",
+    "protocolVersion": 1,
+    "gatewayVersion": "0.1.0"
+  },
+  "service_responds_success": {
+    "type": "authenticated",
+    "organizationId": "org_xyz789",
+    "organizationName": "Acme Corp"
+  },
+  "service_responds_error": {
+    "type": "auth_error",
+    "error": "Invalid or expired gateway token"
+  }
+}

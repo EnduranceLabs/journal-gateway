@@ -1,0 +1,32 @@
+{
+  "name": "@journal/gateway",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "journal-gateway": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@journal-edge/types": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12",
+    "ws": "^8",
+    "zod": "^3.24"
+  },
+  "devDependencies": {
+    "@types/ws": "^8",
+    "typescript": "^5.7",
+    "vitest": "^3"
+  }
+}
