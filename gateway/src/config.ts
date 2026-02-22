@@ -38,7 +38,7 @@ export function parseConfig(
   const mcpServersRaw = env.MCP_SERVERS ?? null;
 
   if (!mcpServersRaw && !skillsDir) {
-    throw new Error("At least one MCP server (MCP_SERVERS) or a skills directory (SKILLS_DIR) must be specified");
+    console.warn("Warning: neither MCP_SERVERS nor SKILLS_DIR is set. The gateway will connect but have no tools or skills to offer.");
   }
 
   const base = ConfigSchema.parse({ token, url, logLevel });

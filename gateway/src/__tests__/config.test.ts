@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { parseConfig } from "../config.js";
 
 function makeEnv(overrides: Record<string, string> = {}): Record<string, string> {
@@ -41,12 +41,17 @@ describe("parseConfig", () => {
     expect(() => parseConfig(env)).toThrow();
   });
 
-  it("throws when neither MCP_SERVERS nor SKILLS_DIR is set", () => {
+  it("warns when neither MCP_SERVERS nor SKILLS_DIR is set", () => {
     const env = makeEnv();
     delete (env as Record<string, string | undefined>).SKILLS_DIR;
-    expect(() => parseConfig(env)).toThrow(
-      "At least one MCP server (MCP_SERVERS) or a skills directory (SKILLS_DIR) must be specified"
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const config = parseConfig(env);
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining("neither MCP_SERVERS nor SKILLS_DIR is set")
     );
+    expect(config.mcpServers).toEqual([]);
+    expect(config.skillsDir).toBeNull();
+    spy.mockRestore();
   });
 
   it("parses MCP_SERVERS JSON config", () => {

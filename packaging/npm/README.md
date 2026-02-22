@@ -28,7 +28,7 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token \
 | `SKILLS_DIR` | no* | — | Path to skills directory |
 | `LOG_LEVEL` | no | `info` | `debug`, `info`, `warn`, `error` |
 
-*At least one of `MCP_SERVERS` or `SKILLS_DIR` must be set.
+*If neither is set, the gateway will connect but won't have any tools or skills available.
 
 ## Documentation
 
