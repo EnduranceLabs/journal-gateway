@@ -1,6 +1,6 @@
 # Journal Gateway
 
-Connect your tools to the [Journal](https://journal.one) agent. Deploy a gateway that connects your data sources (databases, observability platforms, etc.) to Journal over an outbound WebSocket. Your credentials never leave your network.
+Connect your data sources to [Journal](https://journal.one). The gateway runs inside your network and connects outbound to Journal — your credentials never leave your infrastructure and you don't need to open any inbound ports.
 
 ## How It Works
 
@@ -8,19 +8,15 @@ Connect your tools to the [Journal](https://journal.one) agent. Deploy a gateway
 +-------------------------------------+
 |           Your Network              |
 |                                     |
-|  +----------+    +---------------+  |
-|  | Database |<---+               |  |
-|  +----------+    |   Gateway     |  |
-|  +----------+    |  (this repo)  |  |
-|  |  Sentry  |<---+               |  |
-|  +----------+    +-------+-------+  |
-|                          | outbound |
-+--------------------------+----------+
-                           | wss://
-                    +------v-------+
-                    |   Journal    |
-                    |   Service    |
-                    +--------------+
+|  +--------------+  +-------------+  |
+|  | Data sources |<-+   Gateway   |  |
+|  +--------------+  +------+------+  |
+|                           |         |
++---------------------------+---------+
+                            | secure outbound
+                     +------v------+
+                     |   Journal   |
+                     +-------------+
 ```
 
 ## Quick Start
@@ -49,9 +45,9 @@ All configuration is via environment variables.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `JOURNAL_GATEWAY_TOKEN` | yes | — | Gateway auth token (starts with `gw_`) |
-| `JOURNAL_GATEWAY_URL` | no | `wss://gateway.journal.one/v1` | WebSocket endpoint |
-| `MCP_SERVERS` | no* | — | JSON array of MCP server configs |
+| `JOURNAL_GATEWAY_TOKEN` | yes | — | Auth token from Journal (starts with `gw_`) |
+| `JOURNAL_GATEWAY_URL` | no | `wss://gateway.journal.one/v1` | Journal endpoint |
+| `MCP_SERVERS` | no* | — | JSON array of [MCP](https://modelcontextprotocol.io/) server configs (see below) |
 | `SKILLS_DIR` | no* | — | Path to directory containing skill files |
 | `LOG_LEVEL` | no | `info` | Log level: `debug`, `info`, `warn`, `error` |
 
@@ -59,7 +55,9 @@ All configuration is via environment variables.
 
 ### MCP Server Configuration
 
-MCP servers are configured via the `MCP_SERVERS` environment variable as a JSON array:
+[MCP (Model Context Protocol)](https://modelcontextprotocol.io/) is a standard for connecting AI agents to external tools. The gateway can run MCP servers as subprocesses, making their tools available to Journal.
+
+Configure MCP servers via the `MCP_SERVERS` environment variable as a JSON array:
 
 ```bash
 JOURNAL_GATEWAY_TOKEN=gw_your_token \
@@ -72,16 +70,16 @@ Each server object:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `id` | yes | Unique identifier (used as `integrationId` in tool calls) |
-| `command` | yes | Executable to spawn (e.g. `npx`, `python`) |
+| `id` | yes | Unique name for this server |
+| `command` | yes | Command to run (e.g. `npx`, `python`) |
 | `args` | no | Command-line arguments |
 | `name` | no | Display name (defaults to `id`) |
-| `description` | no | What this integration does |
-| `envVars` | no | Mapping from gateway env var to subprocess env var |
+| `description` | no | What this server does |
+| `envVars` | no | Environment variables to pass to the server |
 
 ## Skills
 
-Skills are prompt/workflow templates that guide agent behavior. Place Markdown files in a directory and point `SKILLS_DIR` at it:
+Skills are instructions that teach Journal how to perform specific tasks in your environment. Place Markdown files in a directory and point `SKILLS_DIR` at it:
 
 ```bash
 JOURNAL_GATEWAY_TOKEN=gw_your_token \
@@ -89,7 +87,7 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token \
   journal-gateway
 ```
 
-Each `.md` file becomes a skill with `id` derived from the filename and `content` as the raw file contents.
+Each `.md` file becomes a skill. The filename is used as the skill name.
 
 ## License
 
