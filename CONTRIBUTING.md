@@ -48,7 +48,7 @@ clients/
   typescript/               # @journal/gateway-client npm package
   python/                   # journal-gateway-client PyPI package
 testing/
-  integration/              # End-to-end tests (real gateway ↔ client library)
+  integration/              # End-to-end tests (real gateway <-> client library)
 spec/
   protocol.md               # WebSocket protocol specification
 ```
@@ -60,10 +60,10 @@ The gateway connects outbound to the Journal service over WebSocket. It manages 
 Agents that want to accept gateway connections and call tools through them can use the client libraries. They implement the **service side** of the protocol: run a WebSocket server, authenticate gateways, receive registrations, and provide a `callTool()` API.
 
 ```
-┌─────────────┐        ┌──────────────────┐        ┌───────────┐
-│   Gateway    │──wss──>│  Client Library   │<──API──│   Agent   │
-│ (this repo)  │        │  (TS or Python)   │        │           │
-└─────────────┘        └──────────────────┘        └───────────┘
++-------------+        +------------------+        +-----------+
+|   Gateway   |--wss-->|  Client Library   |<--API--|   Agent   |
+| (this repo) |        |  (TS or Python)   |        |           |
++-------------+        +------------------+        +-----------+
 ```
 
 ### TypeScript (`@journal/gateway-client`)
