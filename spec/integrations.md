@@ -28,16 +28,9 @@ interface IntegrationProvider {
 
 The gateway calls these methods — the provider never calls the gateway. This keeps the dependency arrow one-directional: gateway depends on the interface, provider implements it.
 
-## Integration Types
+## Integration Model
 
-Each integration has a `type` discriminator:
-
-| Type | Meaning |
-|------|---------|
-| `mcp_server` | An MCP server subprocess that exposes tools via the Model Context Protocol |
-| `agent` | A custom agent that provides tools through application-level logic |
-
-Both types share the same registration shape (`id`, `name`, `description`, `tools`). The `type` field tells the service what kind of provider backs the integration — it does not affect the wire protocol.
+Integration is the umbrella concept. An integration can provide tools (callable by the agent), skills (prompt templates that guide agent behavior), or both. How those capabilities are implemented — MCP subprocesses, custom code, Markdown files — is an internal detail hidden from the wire protocol.
 
 ## Adding an MCP Integration
 
@@ -119,7 +112,6 @@ class MyProvider implements IntegrationProvider {
   async getRegistrations(): Promise<Integration[]> {
     return [
       {
-        type: "agent",
         id: "my-tool",
         name: "My Tool",
         description: "Does something useful",
@@ -195,8 +187,6 @@ await gateway.connect();
 
 The gateway core knows nothing about MCP, databases, or any specific tool. It calls `IntegrationProvider` methods and sends the results over the wire. The provider decides how to fulfill those calls — by spawning MCP subprocesses, making HTTP requests, querying databases directly, or anything else.
 
-## Skills vs Integrations
+## Skills Inside Integrations
 
-Integrations provide callable tools that the agent invokes during execution. Skills are a separate concept — prompt/workflow templates that guide agent behavior rather than providing tools. See [skills.md](./skills.md) for the full skills specification.
-
-Both are sent during the `register` message, but they serve different purposes and are loaded through different interfaces (`IntegrationProvider` for integrations, `SkillProvider` for skills).
+An integration can optionally carry skills — prompt/workflow templates that guide agent behavior. Skills are bundled inside integration objects alongside tools. See [skills.md](./skills.md) for the full skills specification.

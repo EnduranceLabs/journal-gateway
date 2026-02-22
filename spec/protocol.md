@@ -73,20 +73,18 @@ Sent immediately after the WebSocket connection opens.
 
 #### `register`
 
-Sent after successful authentication. Declares all available integrations, their tools, and optionally any skills.
+Sent after successful authentication. Declares all available integrations. Each integration can carry tools, skills, or both.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | `"register"` | yes | Message discriminator |
 | `integrations` | `Integration[]` | yes | Array of integration registrations |
-| `skills` | `Skill[]` | no | Array of skill registrations (see [skills.md](./skills.md)) |
 
 ```json
 {
   "type": "register",
   "integrations": [
     {
-      "type": "mcp_server",
       "id": "postgresql",
       "name": "PostgreSQL",
       "description": "Query PostgreSQL databases",
@@ -103,18 +101,24 @@ Sent after successful authentication. Declares all available integrations, their
           }
         }
       ]
-    }
-  ],
-  "skills": [
+    },
     {
-      "id": "review-pr",
-      "name": "Review PR",
-      "description": "Reviews a pull request for code quality",
-      "instructions": "You are reviewing a pull request. Follow these steps...",
-      "metadata": {
-        "tags": ["code-review", "git"],
-        "category": "development"
-      }
+      "id": "skills",
+      "name": "Skills",
+      "description": "Loaded from /opt/journal/skills",
+      "tools": [],
+      "skills": [
+        {
+          "id": "review-pr",
+          "name": "Review PR",
+          "description": "Reviews a pull request for code quality",
+          "instructions": "You are reviewing a pull request. Follow these steps...",
+          "metadata": {
+            "tags": ["code-review", "git"],
+            "category": "development"
+          }
+        }
+      ]
     }
   ]
 }
@@ -271,15 +275,15 @@ The canonical definitions live in `packages/types/src/` as Zod schemas. The tabl
 
 ### Integration
 
-Discriminated union on `type`.
+An integration is the umbrella concept for capabilities added to the gateway. It can provide tools (callable by the agent), skills (prompt templates), or both.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | `"mcp_server"` or `"agent"` | yes | Integration kind |
 | `id` | `string` | yes | Unique identifier |
 | `name` | `string` | yes | Display name |
 | `description` | `string` | yes | Human-readable description |
 | `tools` | `ToolDefinition[]` | yes | Tools provided by this integration |
+| `skills` | `Skill[]` | no | Skills (prompt templates) provided by this integration |
 
 ### ToolDefinition
 

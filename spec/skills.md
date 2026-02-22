@@ -2,15 +2,15 @@
 
 ## What Are Skills?
 
-Skills are prompt/workflow templates that guide agent behavior. They are distinct from integrations:
+Skills are prompt/workflow templates that guide agent behavior. They are bundled inside integrations alongside tools:
 
-| | Integrations | Skills |
+| | Tools | Skills |
 |---|---|---|
-| **Purpose** | Provide callable tools (query a DB, call an API) | Provide instructions that shape agent behavior |
+| **Purpose** | Provide callable actions (query a DB, call an API) | Provide instructions that shape agent behavior |
 | **Mechanism** | Tool calls routed through `IntegrationProvider` | Prompt templates sent at registration, used by the service |
 | **Runtime** | Invoked on each `tool_call` message | Read once at startup, sent during `register` |
 
-Skills are useful for encoding organizational workflows, code review standards, deployment checklists, and other repeatable patterns that agents should follow.
+Both tools and skills travel inside `Integration` objects. An integration can carry tools, skills, or both. Skills are useful for encoding organizational workflows, code review standards, deployment checklists, and other repeatable patterns that agents should follow.
 
 ## Skill Schema
 
@@ -83,31 +83,35 @@ At least one of `INTEGRATIONS` or `SKILLS_DIR` must be set. The gateway can run 
 Skill files (.md)
       │
       ▼
- SkillLoader.load()    ← reads directory, parses front matter
+ SkillLoader.load()         ← reads directory, parses front matter
       │
       ▼
- SkillProvider.getSkills()  ← returns Skill[]
+ SkillLoader.getIntegrations()  ← returns Integration[] with skills inside
       │
       ▼
- GatewayConnection      ← includes skills in `register` message
+ IntegrationProvider         ← merges skill integrations with tool integrations
       │
       ▼
- Journal Service        ← makes skills available to agents
+ GatewayConnection           ← sends unified `register` message
+      │
+      ▼
+ Journal Service             ← makes skills available to agents
 ```
 
 1. At startup, `SkillLoader` reads all `.md` files from `SKILLS_DIR`
 2. It parses YAML front matter and Markdown body into `Skill` objects
-3. During connection, `GatewayConnection` calls `getSkills()` on the `SkillProvider`
-4. Skills are included in the `register` message sent to the Journal service
-5. The service makes these skills available to agents in the organization
+3. `getIntegrations()` wraps the skills into an `Integration` object (with `tools: []` and `skills: [...]`)
+4. The CLI composes a unified `IntegrationProvider` that merges MCP integrations with skill integrations
+5. During connection, `GatewayConnection` calls `getRegistrations()` and sends all integrations in the `register` message
+6. The service makes these skills available to agents in the organization
 
 ## Architecture
 
-The skills package (`packages/skills/`) is a separate package from MCP, implementing the `SkillProvider` interface defined in `packages/gateway/`. This keeps skills orthogonal to integrations:
+Skills are bundled as an integration. The `SkillLoader` in `packages/skills/` loads Markdown files and returns them as an `Integration` object with skills attached. The CLI in `packages/mcp/` composes this with MCP tool integrations into a single `IntegrationProvider`.
 
 ```
-packages/types/     ← Skill Zod schema
-packages/gateway/   ← SkillProvider interface
-packages/skills/    ← SkillLoader implementation
-packages/mcp/       ← CLI wires SkillLoader + McpRuntime together
+packages/types/     ← Skill Zod schema + Integration schema (with optional skills)
+packages/gateway/   ← IntegrationProvider interface (skills travel inside integrations)
+packages/skills/    ← SkillLoader implementation (returns Integration[])
+packages/mcp/       ← CLI composes SkillLoader + McpRuntime into one provider
 ```

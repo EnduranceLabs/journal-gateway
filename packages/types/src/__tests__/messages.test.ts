@@ -30,7 +30,6 @@ describe("Gateway → Service messages", () => {
       type: "register",
       integrations: [
         {
-          type: "mcp_server" as const,
           id: "postgresql",
           name: "PostgreSQL",
           description: "Query databases",
@@ -47,17 +46,24 @@ describe("Gateway → Service messages", () => {
     expect(RegisterMessageSchema.parse(msg)).toEqual(msg);
   });
 
-  it("parses register message with skills", () => {
+  it("parses register message with skills inside integration", () => {
     const msg = {
       type: "register",
-      integrations: [],
-      skills: [
+      integrations: [
         {
-          id: "review-pr",
-          name: "Review PR",
-          description: "Reviews a pull request",
-          instructions: "Follow these steps to review...",
-          metadata: { tags: ["git"], category: "development" },
+          id: "skills",
+          name: "Skills",
+          description: "Loaded skills",
+          tools: [],
+          skills: [
+            {
+              id: "review-pr",
+              name: "Review PR",
+              description: "Reviews a pull request",
+              instructions: "Follow these steps to review...",
+              metadata: { tags: ["git"], category: "development" },
+            },
+          ],
         },
       ],
     };

@@ -72,12 +72,12 @@ See [spec/skills.md](./spec/skills.md) for the full specification.
 ```
 packages/
   types/     # Protocol types (Zod schemas) — stable
-  gateway/   # Core connection library (IntegrationProvider + SkillProvider) — stable
+  gateway/   # Core connection library (IntegrationProvider) — stable
   skills/    # Skill loading from Markdown files
   mcp/       # MCP integration provider + CLI entry point
 ```
 
-The gateway core (`packages/gateway/`) is a stable, minimal library that handles WebSocket connections and tool routing via a generic `IntegrationProvider` interface. Skills are loaded through the `SkillProvider` interface. The MCP implementation (`packages/mcp/`) provides the concrete integration by spawning MCP server subprocesses, and wires in the skill loader.
+The gateway core (`packages/gateway/`) is a stable, minimal library that handles WebSocket connections and tool routing via a generic `IntegrationProvider` interface. Integration is the umbrella concept — each integration can carry tools, skills, or both. The MCP implementation (`packages/mcp/`) provides the concrete integration by spawning MCP server subprocesses and composing skill integrations from the skill loader.
 
 ```
 ┌─────────────────────────────────────┐

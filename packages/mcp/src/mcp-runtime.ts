@@ -45,7 +45,6 @@ export class McpRuntime implements IntegrationProvider {
 
       const tools = await mcpProcess.listTools();
       registrations.push({
-        type: "mcp_server",
         id: definition.id,
         name: definition.name,
         description: definition.description,

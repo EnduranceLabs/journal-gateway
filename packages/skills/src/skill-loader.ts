@@ -1,9 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, basename } from "node:path";
-import type { Skill } from "@journal-edge/types";
-import type { SkillProvider } from "@journal/gateway";
+import type { Skill, Integration } from "@journal-edge/types";
 
-export class SkillLoader implements SkillProvider {
+export class SkillLoader {
   private skills: Skill[] = [];
 
   constructor(
@@ -41,8 +40,15 @@ export class SkillLoader implements SkillProvider {
     this.logger?.info("Skills loaded", { count: loaded.length });
   }
 
-  async getSkills(): Promise<Skill[]> {
-    return this.skills;
+  getIntegrations(): Integration[] {
+    if (this.skills.length === 0) return [];
+    return [{
+      id: "skills",
+      name: "Skills",
+      description: `Loaded from ${this.skillsDir}`,
+      tools: [],
+      skills: this.skills,
+    }];
   }
 
   private parseSkillFile(filename: string, content: string): Skill | null {

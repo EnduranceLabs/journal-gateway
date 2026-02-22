@@ -46,6 +46,7 @@ function makeConfig(integrations: McpServerConfig[] = [testIntegration]): McpCon
     mcpEnvVars: new Map(
       integrations.map((i) => [i.id, { DATABASE_URL: "postgresql://localhost/test" }])
     ),
+    skillsDir: null,
   };
 }
 

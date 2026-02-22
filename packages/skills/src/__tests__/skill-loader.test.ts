@@ -30,8 +30,12 @@ You are reviewing a pull request. Follow these steps...`
 
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
+    const integrations = loader.getIntegrations();
 
+    expect(integrations).toHaveLength(1);
+    expect(integrations[0].id).toBe("skills");
+    expect(integrations[0].tools).toEqual([]);
+    const skills = integrations[0].skills!;
     expect(skills).toHaveLength(1);
     expect(skills[0].id).toBe("review-pr");
     expect(skills[0].name).toBe("Review PR");
@@ -67,8 +71,10 @@ Instructions for B.`
 
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
+    const integrations = loader.getIntegrations();
 
+    expect(integrations).toHaveLength(1);
+    const skills = integrations[0].skills!;
     expect(skills).toHaveLength(2);
     const ids = skills.map((s) => s.id).sort();
     expect(ids).toEqual(["skill-a", "skill-b"]);
@@ -77,22 +83,22 @@ Instructions for B.`
   it("returns empty array for null skillsDir", async () => {
     const loader = new SkillLoader(null);
     await loader.load();
-    const skills = await loader.getSkills();
-    expect(skills).toEqual([]);
+    const integrations = loader.getIntegrations();
+    expect(integrations).toEqual([]);
   });
 
   it("returns empty array for nonexistent directory", async () => {
     const loader = new SkillLoader("/nonexistent/path");
     await loader.load();
-    const skills = await loader.getSkills();
-    expect(skills).toEqual([]);
+    const integrations = loader.getIntegrations();
+    expect(integrations).toEqual([]);
   });
 
   it("returns empty array for empty directory", async () => {
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
-    expect(skills).toEqual([]);
+    const integrations = loader.getIntegrations();
+    expect(integrations).toEqual([]);
   });
 
   it("skips files without front matter", async () => {
@@ -103,8 +109,8 @@ Instructions for B.`
 
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
-    expect(skills).toEqual([]);
+    const integrations = loader.getIntegrations();
+    expect(integrations).toEqual([]);
   });
 
   it("skips files missing required name", async () => {
@@ -119,8 +125,8 @@ Some instructions.`
 
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
-    expect(skills).toEqual([]);
+    const integrations = loader.getIntegrations();
+    expect(integrations).toEqual([]);
   });
 
   it("skips files missing required description", async () => {
@@ -135,8 +141,8 @@ Some instructions.`
 
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
-    expect(skills).toEqual([]);
+    const integrations = loader.getIntegrations();
+    expect(integrations).toEqual([]);
   });
 
   it("skips files with empty body", async () => {
@@ -151,8 +157,8 @@ description: This skill has no body
 
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
-    expect(skills).toEqual([]);
+    const integrations = loader.getIntegrations();
+    expect(integrations).toEqual([]);
   });
 
   it("ignores non-markdown files", async () => {
@@ -169,9 +175,9 @@ Do the thing.`
 
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
-    expect(skills).toHaveLength(1);
-    expect(skills[0].id).toBe("actual-skill");
+    const integrations = loader.getIntegrations();
+    expect(integrations).toHaveLength(1);
+    expect(integrations[0].skills![0].id).toBe("actual-skill");
   });
 
   it("parses metadata with category only", async () => {
@@ -188,9 +194,9 @@ Deploy it.`
 
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
+    const integrations = loader.getIntegrations();
 
-    expect(skills[0].metadata).toEqual({ category: "ops" });
+    expect(integrations[0].skills![0].metadata).toEqual({ category: "ops" });
   });
 
   it("parses metadata with tags only", async () => {
@@ -207,9 +213,9 @@ Debug it.`
 
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
+    const integrations = loader.getIntegrations();
 
-    expect(skills[0].metadata).toEqual({
+    expect(integrations[0].skills![0].metadata).toEqual({
       tags: ["debugging", "troubleshooting"],
     });
   });
@@ -227,8 +233,8 @@ Just do it.`
 
     const loader = new SkillLoader(tempDir);
     await loader.load();
-    const skills = await loader.getSkills();
+    const integrations = loader.getIntegrations();
 
-    expect(skills[0].metadata).toBeUndefined();
+    expect(integrations[0].skills![0].metadata).toBeUndefined();
   });
 });

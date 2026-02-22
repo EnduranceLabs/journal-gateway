@@ -1,14 +1,10 @@
-import type { Integration, Skill, ToolResult } from "@journal-edge/types";
+import type { Integration, ToolResult } from "@journal-edge/types";
 
 export interface IntegrationProvider {
   getRegistrations(): Promise<Integration[]>;
   callTool(integrationId: string, toolName: string, args: Record<string, unknown>): Promise<ToolResult>;
   start(): Promise<void>;
   stop(): Promise<void>;
-}
-
-export interface SkillProvider {
-  getSkills(): Promise<Skill[]>;
 }
 
 export class IntegrationNotFoundError extends Error {

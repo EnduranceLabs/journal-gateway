@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GatewayConnection } from "../connection.js";
-import type { GatewayConfig, IntegrationProvider, SkillProvider } from "../types.js";
+import type { GatewayConfig, IntegrationProvider } from "../types.js";
 import { EventEmitter } from "node:events";
 
 // Mock ws
@@ -47,7 +47,6 @@ function createMockProvider(): IntegrationProvider {
   return {
     getRegistrations: vi.fn().mockResolvedValue([
       {
-        type: "mcp_server",
         id: "postgresql",
         name: "PostgreSQL",
         description: "Query databases",
@@ -210,78 +209,6 @@ describe("GatewayConnection", () => {
     expect(parsed.requestId).toBe("req_abc");
     expect(parsed.result.content[0].text).toBe("result");
 
-    await conn.close();
-  });
-
-  it("sends skills in register when SkillProvider is given", async () => {
-    const provider = createMockProvider();
-    const skillProvider: SkillProvider = {
-      getSkills: vi.fn().mockResolvedValue([
-        {
-          id: "review-pr",
-          name: "Review PR",
-          description: "Reviews a pull request",
-          instructions: "Follow these steps...",
-        },
-      ]),
-    };
-    const conn = new GatewayConnection(config, provider, skillProvider);
-
-    const connectPromise = conn.connect();
-
-    await new Promise((r) => setTimeout(r, 10));
-    const ws = mockWsInstances[0];
-
-    // Complete auth
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
-
-    await new Promise((r) => setTimeout(r, 10));
-    const registerMsg = JSON.parse(ws.sent[1]);
-    expect(registerMsg.type).toBe("register");
-    expect(registerMsg.integrations).toHaveLength(1);
-    expect(registerMsg.skills).toHaveLength(1);
-    expect(registerMsg.skills[0].id).toBe("review-pr");
-
-    ws.emit("message", JSON.stringify({
-      type: "registered",
-      integrationCount: 1,
-      toolCount: 1,
-      skillCount: 1,
-    }));
-
-    await connectPromise;
-    await conn.close();
-  });
-
-  it("sends register without skills when no SkillProvider", async () => {
-    const provider = createMockProvider();
-    const conn = new GatewayConnection(config, provider);
-
-    const connectPromise = conn.connect();
-
-    await new Promise((r) => setTimeout(r, 10));
-    const ws = mockWsInstances[0];
-
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
-
-    await new Promise((r) => setTimeout(r, 10));
-    const registerMsg = JSON.parse(ws.sent[1]);
-    expect(registerMsg.type).toBe("register");
-    expect(registerMsg.skills).toBeUndefined();
-
-    ws.emit("message", JSON.stringify({
-      type: "registered",
-      integrationCount: 1,
-      toolCount: 1,
-    }));
-
-    await connectPromise;
     await conn.close();
   });
 

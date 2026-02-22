@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SkillSchema } from "./skills.js";
 
 export const ToolDefinitionSchema = z.object({
   name: z.string(),
@@ -8,30 +9,13 @@ export const ToolDefinitionSchema = z.object({
 
 export type ToolDefinition = z.infer<typeof ToolDefinitionSchema>;
 
-export const McpServerIntegrationSchema = z.object({
-  type: z.literal("mcp_server"),
+export const IntegrationSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
   tools: z.array(ToolDefinitionSchema),
+  skills: z.array(SkillSchema).optional(),
 });
-
-export type McpServerIntegration = z.infer<typeof McpServerIntegrationSchema>;
-
-export const AgentIntegrationSchema = z.object({
-  type: z.literal("agent"),
-  id: z.string(),
-  name: z.string(),
-  description: z.string(),
-  tools: z.array(ToolDefinitionSchema),
-});
-
-export type AgentIntegration = z.infer<typeof AgentIntegrationSchema>;
-
-export const IntegrationSchema = z.discriminatedUnion("type", [
-  McpServerIntegrationSchema,
-  AgentIntegrationSchema,
-]);
 
 export type Integration = z.infer<typeof IntegrationSchema>;
 

@@ -10,16 +10,12 @@ export { SkillSchema, type Skill } from "./skills.js";
 
 export {
   ToolDefinitionSchema,
-  McpServerIntegrationSchema,
-  AgentIntegrationSchema,
   IntegrationSchema,
   TextContentSchema,
   ImageContentSchema,
   ContentBlockSchema,
   ToolResultSchema,
   type ToolDefinition,
-  type McpServerIntegration,
-  type AgentIntegration,
   type Integration,
   type TextContent,
   type ImageContent,
