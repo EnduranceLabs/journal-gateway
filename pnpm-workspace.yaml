@@ -1,0 +1,4 @@
+packages:
+  - gateway
+  - clients/typescript
+  - testing/integration/ts

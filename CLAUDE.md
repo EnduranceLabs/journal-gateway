@@ -25,6 +25,15 @@ Skill files (raw Markdown) go in the directory specified by `SKILLS_DIR`.
 Skills are `{ id, content }` — the id is derived from the filename, content is the
 raw file contents. No YAML parsing at the gateway level.
 
+## Client Libraries
+- `clients/typescript/` — `@journal/gateway-client` npm package. Implements the
+  service side of the protocol: runs a WebSocket server, authenticates gateways,
+  receives registrations, and provides a `callTool()` API.
+- `clients/python/` — `journal-gateway-client` PyPI package. Same functionality
+  as the TypeScript client, using `websockets` and `asyncio`.
+- `testing/integration/` — Integration tests that spin up the real gateway +
+  client library and verify end-to-end tool calls.
+
 ## IntegrationProvider Interface
 The Runtime implements this interface to provide capabilities to the connection:
 - `getRegistrations()` — return available integrations (each may have tools, skills, or both)

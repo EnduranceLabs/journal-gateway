@@ -1,19 +1,21 @@
 {
-  "name": "@journal/gateway",
+  "name": "@journal/gateway-client",
   "version": "0.1.0",
   "type": "module",
-  "main": "./dist/types/index.js",
-  "types": "./dist/types/index.d.ts",
-  "bin": {
-    "journal-gateway": "./dist/main.js"
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    }
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12",
+    "@journal/gateway": "workspace:*",
     "ws": "^8",
     "zod": "^3.24"
   },
