@@ -1,0 +1,25 @@
+{
+  "name": "@journal/gateway",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "journal-gateway": "./dist/main.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12",
+    "ws": "^8",
+    "zod": "^3.24"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/ws": "^8",
+    "typescript": "^5.7",
+    "vitest": "^3"
+  }
+}

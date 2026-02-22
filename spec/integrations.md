@@ -2,11 +2,11 @@
 
 ## Problem
 
-The gateway core (`packages/gateway/`) is a stable, minimal library that handles WebSocket connections, authentication, registration, and tool-call routing. It cannot be updated frequently once deployed. Adding new tool providers — databases, observability platforms, internal APIs — must be possible without modifying the core. The `IntegrationProvider` interface is the seam that makes this work.
+The gateway core (connection handling, auth, registration, tool-call routing) is stable and minimal. Adding new tool providers — databases, observability platforms, internal APIs — must be possible without modifying the core. The `IntegrationProvider` interface is the seam that makes this work.
 
 ## IntegrationProvider Interface
 
-Any object that implements `IntegrationProvider` can supply tools to the gateway. The interface is defined in `packages/gateway/src/types.ts`:
+Any object that implements `IntegrationProvider` can supply tools to the gateway. The interface is defined in `gateway/src/types/provider.ts`:
 
 ```typescript
 interface IntegrationProvider {
@@ -32,73 +32,51 @@ The gateway calls these methods — the provider never calls the gateway. This k
 
 Integration is the umbrella concept. An integration can provide tools (callable by the agent), skills (prompt templates that guide agent behavior), or both. How those capabilities are implemented — MCP subprocesses, custom code, Markdown files — is an internal detail hidden from the wire protocol.
 
-## Adding an MCP Integration
+## MCP Server Configuration
 
-The built-in MCP provider (`packages/mcp/`) implements `IntegrationProvider` by spawning MCP server subprocesses. To add a new MCP-based integration:
-
-### 1. Define the McpServerConfig
-
-Each MCP server is described by a config object:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | Unique identifier (used as `integrationId` in tool calls) |
-| `type` | `"mcp_server"` | Literal discriminator |
-| `name` | `string` | Display name |
-| `description` | `string` | What this integration does |
-| `command` | `string` | Executable to spawn (e.g. `npx`, `python`) |
-| `args` | `string[]` | Command-line arguments |
-| `envVars` | `Record<string, string>` | Mapping from config key to environment variable name passed to the subprocess |
-
-### 2. Add to the catalog
-
-Register the config in the catalog file at `packages/mcp/src/integrations/index.ts`:
-
-```typescript
-import { McpServerConfig } from "../config.js";
-
-export const BUILT_IN_MCP_SERVERS: Record<string, McpServerConfig> = {
-  postgresql: {
-    id: "postgresql",
-    type: "mcp_server",
-    name: "PostgreSQL",
-    description: "Query PostgreSQL databases",
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-postgres"],
-    envVars: {
-      DATABASE_URL: "DATABASE_URL",
-    },
-  },
-};
-```
-
-### 3. Configure environment variables
-
-When the gateway starts, the user sets environment variables that the config's `envVars` mapping resolves:
+MCP servers are configured via the `MCP_SERVERS` environment variable as a JSON array:
 
 ```bash
-INTEGRATIONS=postgresql \
+MCP_SERVERS='[
+  {
+    "id": "postgresql",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-postgres"],
+    "name": "PostgreSQL",
+    "description": "Query PostgreSQL databases",
+    "envVars": { "DATABASE_URL": "DATABASE_URL" }
+  }
+]' \
 DATABASE_URL=postgresql://localhost:5432/mydb \
 journal-gateway
 ```
 
-The `envVars` mapping (`{ DATABASE_URL: "DATABASE_URL" }`) tells the runtime to read the `DATABASE_URL` environment variable and pass it to the subprocess under the same name.
+Each server object:
 
-### 4. How it works at runtime
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier (used as `integrationId` in tool calls) |
+| `command` | `string` | Executable to spawn (e.g. `npx`, `python`) |
+| `args` | `string[]` | Command-line arguments |
+| `name` | `string` | Display name (defaults to `id`) |
+| `description` | `string` | What this integration does |
+| `envVars` | `Record<string, string>` | Mapping from gateway env var to subprocess env var |
 
-1. The user sets `INTEGRATIONS=postgresql` (comma-separated list of integration IDs).
-2. `parseConfig()` looks up each ID in `BUILT_IN_MCP_SERVERS`, resolves environment variables, and produces an `McpConfig`.
-3. `McpRuntime.start()` spawns the MCP server subprocess with the resolved env vars.
-4. `McpRuntime.getRegistrations()` queries each subprocess for its tool list and returns `Integration[]`.
-5. On `tool_call`, `McpRuntime.callTool()` routes to the correct subprocess.
+### How it works at runtime
+
+1. The user sets `MCP_SERVERS` with the JSON config and provides the required env vars.
+2. `parseConfig()` validates the JSON and resolves environment variables.
+3. `Runtime.start()` spawns each MCP server subprocess with the resolved env vars.
+4. `Runtime.getRegistrations()` queries each subprocess for its tool list and returns `Integration[]`.
+5. On `tool_call`, `Runtime.callTool()` routes to the correct subprocess.
 
 ## Custom Providers
 
 You don't have to use MCP. Implement `IntegrationProvider` directly for full control:
 
 ```typescript
-import { IntegrationProvider } from "@journal/gateway";
-import { Integration, ToolResult } from "@journal/types";
+import type { IntegrationProvider } from "@journal/gateway";
+import type { Integration, ToolResult } from "@journal/gateway";
 
 class MyProvider implements IntegrationProvider {
   async start() {
@@ -146,10 +124,10 @@ class MyProvider implements IntegrationProvider {
 Then pass it to the gateway:
 
 ```typescript
-import { Gateway } from "@journal/gateway";
+import { GatewayConnection } from "@journal/gateway";
 
-const gateway = new Gateway(config, new MyProvider());
-await gateway.connect();
+const connection = new GatewayConnection(config, new MyProvider());
+await connection.connect();
 ```
 
 ## Runtime Architecture
@@ -159,16 +137,16 @@ await gateway.connect();
 |              Gateway Process                   |
 |                                                |
 |  +------------------+   +-----------------+    |
-|  |    Gateway Core   |-->| IntegrationProvider |
-|  | (packages/gateway)|   |   (interface)   |    |
+|  | GatewayConnection|-->| IntegrationProvider |
+|  | (connection.ts)  |   |   (interface)   |    |
 |  +------------------+   +--------+--------+    |
 |                                  |              |
 |                          +-------+-------+      |
 |                          |               |      |
 |                    +-----+-----+   +-----+-----+|
-|                    | McpRuntime |   |  Custom   ||
-|                    |(packages/  |   |  Provider ||
-|                    |   mcp/)    |   |           ||
+|                    |  Runtime  |   |  Custom   ||
+|                    |(runtime.ts|   |  Provider ||
+|                    |           |   |           ||
 |                    +-----+-----+   +-----------+|
 |                          |                      |
 |              +-----------+-----------+          |
@@ -185,7 +163,7 @@ await gateway.connect();
             +-----+     +------+    +-----+
 ```
 
-The gateway core knows nothing about MCP, databases, or any specific tool. It calls `IntegrationProvider` methods and sends the results over the wire. The provider decides how to fulfill those calls — by spawning MCP subprocesses, making HTTP requests, querying databases directly, or anything else.
+The gateway connection knows nothing about MCP, databases, or any specific tool. It calls `IntegrationProvider` methods and sends the results over the wire. The provider decides how to fulfill those calls — by spawning MCP subprocesses, making HTTP requests, querying databases directly, or anything else.
 
 ## Skills Inside Integrations
 

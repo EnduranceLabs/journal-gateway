@@ -8,82 +8,68 @@ user-invocable: false
 
 ## Commands
 
-All commands run from the repository root via Turborepo:
+All commands run from the repository root:
 
 ```bash
-pnpm build       # Build all packages (types → gateway → mcp)
+pnpm build       # Build the gateway package
 pnpm test        # Run all tests with vitest
-pnpm typecheck   # TypeScript type checking across all packages
+pnpm typecheck   # TypeScript type checking
 ```
 
-## Monorepo Structure
+## Project Structure
 
 ```
-packages/
-  types/     # @journal-edge/types — Zod schemas, TypeScript types, protocol definitions
-  gateway/   # @journal/gateway — Core connection library (depends on @journal-edge/types)
-  mcp/       # @journal/mcp — MCP integration provider + CLI (depends on gateway + types)
-protocol/    # Protocol specification (JSON Schema + README)
+gateway/
+  src/
+    types/          # Zod schemas, TypeScript types, protocol definitions
+    common/         # Shared utilities (logger)
+    connection.ts   # WebSocket connection to Journal service
+    runtime.ts      # MCP + skills runtime (IntegrationProvider)
+    mcp-client.ts   # MCP server subprocess wrapper
+    skill-client.ts # Skill file loader
+    config.ts       # Configuration parsing
+    main.ts         # CLI entry point
+    __tests__/      # All tests
 ```
 
-**Build order matters:** `packages/types` → `packages/gateway` → `packages/mcp`. Turborepo handles this automatically via `pnpm build`.
+## Key Source Files
 
-## Package Details
+### `gateway/src/types/`
 
-### `packages/types`
+Protocol types defined with Zod schemas:
+- `errors.ts` — `GatewayError`, error code enum (`INTEGRATION_NOT_FOUND`, `TOOL_NOT_FOUND`, `EXECUTION_FAILED`, `TIMEOUT`)
+- `integrations.ts` — `Integration`, `ToolDefinition`, `ToolResult`, `ContentBlock`
+- `messages.ts` — All message types with `z.discriminatedUnion("type", [...])` for `GatewayMessage` and `ServiceMessage`
+- `skills.ts` — `Skill` type (`{ id, content }`)
+- `provider.ts` — `IntegrationProvider` interface, `GatewayConfig`, `IntegrationNotFoundError`
+- `index.ts` — Re-exports everything
 
-Protocol types defined with Zod schemas. Source files:
-- `src/errors.ts` — `GatewayError`, error code enum (`INTEGRATION_NOT_FOUND`, `TOOL_NOT_FOUND`, `EXECUTION_FAILED`, `TIMEOUT`)
-- `src/integrations.ts` — `Integration`, `ToolDefinition`, `ToolResult`, `ContentBlock`
-- `src/messages.ts` — All message types with `z.discriminatedUnion("type", [...])` for `GatewayMessage` and `ServiceMessage`
-- `src/index.ts` — Re-exports everything
+### `gateway/src/`
 
-### `packages/gateway`
-
-Core connection library. Stable, minimal — no MCP code. Source files:
-- `src/types.ts` — `IntegrationProvider` interface, `GatewayConfig`, `IntegrationNotFoundError`
-- `src/connection.ts` — WebSocket connection to Journal service with reconnection
-- `src/logger.ts` — Structured JSON logger
-- `src/version.ts` — Package version loader
-- `src/index.ts` — Re-exports everything
-
-### `packages/mcp`
-
-MCP integration provider and CLI entry point. Source files:
-- `src/config.ts` — `McpServerConfig` interface and `parseConfig` with Zod validation
-- `src/integrations/` — Built-in MCP server catalog (one file per integration, barrel-exported)
-- `src/mcp-process.ts` — Spawns MCP server subprocesses via `@modelcontextprotocol/sdk`
-- `src/mcp-runtime.ts` — `McpRuntime` implements `IntegrationProvider` (manages integration lifecycle)
-- `src/main.ts` — CLI entry point
+- `connection.ts` — WebSocket connection to Journal service with reconnection
+- `common/logger.ts` — Structured JSON logger
+- `version.ts` — Package version loader
+- `config.ts` — `McpServerConfig` interface and `parseConfig` with Zod validation
+- `mcp-client.ts` — Spawns MCP server subprocesses via `@modelcontextprotocol/sdk`
+- `runtime.ts` — `Runtime` implements `IntegrationProvider` (manages MCP clients + skills)
+- `skill-client.ts` — Loads raw Markdown files as skills
+- `main.ts` — CLI entry point
 
 ## Testing Patterns
 
-Tests use **vitest**. Run a single package's tests:
+Tests use **vitest**. Run tests:
 
 ```bash
-cd packages/types && pnpm test
-cd packages/gateway && pnpm test
-cd packages/mcp && pnpm test
+pnpm test
+# or directly:
+cd gateway && pnpm test
 ```
 
 ### Mocking conventions
 
 - **MCP SDK:** Use `vi.mock("@modelcontextprotocol/sdk/client/index.js")` and `vi.mock("@modelcontextprotocol/sdk/client/stdio.js")` to mock the MCP client and transport
 - **WebSocket:** Use `vi.mock("ws")` to mock the `ws` module
-- **Config tests:** Use the `makeEnv` helper to create env var objects with sensible defaults, then override specific values:
-
-```ts
-function makeEnv(overrides: Record<string, string> = {}): Record<string, string> {
-  return {
-    JOURNAL_GATEWAY_TOKEN: "gw_test123",
-    JOURNAL_GATEWAY_URL: "wss://gateway.journal.one/v1",
-    INTEGRATIONS: "postgresql",
-    DATABASE_URL: "postgresql://localhost:5432/test",
-    LOG_LEVEL: "info",
-    ...overrides,
-  };
-}
-```
+- **Config tests:** Use the `makeEnv` helper to create env var objects with sensible defaults, then override specific values
 
 ### Process event testing
 
@@ -95,4 +81,4 @@ The gateway uses `EventEmitter` patterns for process lifecycle. Tests verify eve
 - **Structured JSON logging** via the `Logger` class
 - **ESM-only** (`"type": "module"` in package.json, `.js` extensions in imports)
 - **Node >= 22** required
-- **pnpm** as package manager (with Turborepo for task orchestration)
+- **pnpm** as package manager

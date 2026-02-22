@@ -110,13 +110,7 @@ Sent after successful authentication. Declares all available integrations. Each 
       "skills": [
         {
           "id": "review-pr",
-          "name": "Review PR",
-          "description": "Reviews a pull request for code quality",
-          "instructions": "You are reviewing a pull request. Follow these steps...",
-          "metadata": {
-            "tags": ["code-review", "git"],
-            "category": "development"
-          }
+          "content": "You are reviewing a pull request. Follow these steps..."
         }
       ]
     }
@@ -271,7 +265,7 @@ Heartbeat sent by the service.
 
 ## Data Types
 
-The canonical definitions live in `packages/types/src/` as Zod schemas. The tables below are a prose summary for implementors working in other languages.
+The canonical definitions live in `gateway/src/types/` as Zod schemas. The tables below are a prose summary for implementors working in other languages.
 
 ### Integration
 
@@ -321,17 +315,12 @@ Discriminated union on `type`.
 
 ### Skill
 
-A prompt/workflow template that guides agent behavior. Unlike integrations (which provide callable tools), skills provide instructions that shape how the agent approaches a task. See [skills.md](./skills.md) for the full specification.
+A prompt/workflow template that guides agent behavior. Skills are raw Markdown content — the gateway does not parse or interpret them.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | `string` | yes | Unique identifier (derived from filename) |
-| `name` | `string` | yes | Display name |
-| `description` | `string` | yes | What the skill does |
-| `instructions` | `string` | yes | Prompt instructions for the agent |
-| `metadata` | `object` | no | Optional tags and category |
-| `metadata.tags` | `string[]` | no | Categorization tags |
-| `metadata.category` | `string` | no | Skill category |
+| `content` | `string` | yes | Raw Markdown content |
 
 ### GatewayError
 

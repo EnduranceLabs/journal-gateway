@@ -3,37 +3,19 @@ RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
-COPY packages/types/package.json ./packages/types/package.json
-COPY packages/gateway/package.json ./packages/gateway/package.json
-COPY packages/skills/package.json ./packages/skills/package.json
-COPY packages/mcp/package.json ./packages/mcp/package.json
-RUN pnpm install --frozen-lockfile
+COPY package.json pnpm-lock.yaml ./
+COPY gateway/package.json ./gateway/package.json
+RUN cd gateway && pnpm install --frozen-lockfile
 
 FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/types/node_modules ./packages/types/node_modules
-COPY --from=deps /app/packages/gateway/node_modules ./packages/gateway/node_modules
-COPY --from=deps /app/packages/skills/node_modules ./packages/skills/node_modules
-COPY --from=deps /app/packages/mcp/node_modules ./packages/mcp/node_modules
+COPY --from=deps /app/gateway/node_modules ./gateway/node_modules
 COPY . .
-RUN pnpm build
+RUN cd gateway && pnpm build
 
 FROM base AS runner
 ENV NODE_ENV=production
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/types/node_modules ./packages/types/node_modules
-COPY --from=deps /app/packages/gateway/node_modules ./packages/gateway/node_modules
-COPY --from=deps /app/packages/skills/node_modules ./packages/skills/node_modules
-COPY --from=deps /app/packages/mcp/node_modules ./packages/mcp/node_modules
-COPY --from=builder /app/packages/types/dist ./packages/types/dist
-COPY --from=builder /app/packages/gateway/dist ./packages/gateway/dist
-COPY --from=builder /app/packages/skills/dist ./packages/skills/dist
-COPY --from=builder /app/packages/mcp/dist ./packages/mcp/dist
-COPY packages/types/package.json ./packages/types/package.json
-COPY packages/gateway/package.json ./packages/gateway/package.json
-COPY packages/skills/package.json ./packages/skills/package.json
-COPY packages/mcp/package.json ./packages/mcp/package.json
-COPY package.json pnpm-workspace.yaml ./
+COPY --from=deps /app/gateway/node_modules ./gateway/node_modules
+COPY --from=builder /app/gateway/dist ./gateway/dist
+COPY gateway/package.json ./gateway/package.json
 
-CMD ["node", "packages/mcp/dist/main.js"]
+CMD ["node", "gateway/dist/main.js"]

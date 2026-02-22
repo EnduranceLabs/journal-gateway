@@ -6,15 +6,11 @@
   },
   "packageManager": "pnpm@10.15.1",
   "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "typecheck": "turbo typecheck",
-    "test": "turbo test"
+    "build": "cd gateway && pnpm build",
+    "test": "cd gateway && pnpm test",
+    "typecheck": "cd gateway && pnpm typecheck"
   },
   "devDependencies": {
-    "turbo": "^2",
-    "typescript": "^5.7",
-    "vitest": "^3",
     "prettier": "^3"
   }
 }

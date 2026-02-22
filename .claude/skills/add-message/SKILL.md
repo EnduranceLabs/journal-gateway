@@ -11,37 +11,9 @@ Follow these steps to add a new message to the Journal Gateway Protocol.
 
 The first argument is the message name (e.g., `heartbeat_ack`). The second argument is the direction: `gateway` (gateway -> service) or `service` (service -> gateway).
 
-## 1. Add the JSON Schema definition
+## 1. Add the Zod schema and TypeScript type
 
-Open `protocol/schemas/messages.schema.json` and add a new entry under `$defs`.
-
-Follow the existing pattern:
-
-```json
-"MyNewMessage": {
-  "type": "object",
-  "description": "Description of when/why this message is sent",
-  "properties": {
-    "type": { "const": "my_new" },
-    "field1": {
-      "type": "string",
-      "description": "Field description"
-    }
-  },
-  "required": ["type", "field1"],
-  "additionalProperties": false
-}
-```
-
-Then add a `$ref` to the appropriate discriminated union (`GatewayMessage` or `ServiceMessage`) in the same file:
-
-```json
-{ "$ref": "#/$defs/MyNewMessage" }
-```
-
-## 2. Add the Zod schema and TypeScript type
-
-Open `packages/types/src/messages.ts` and add the Zod schema + type export.
+Open `gateway/src/types/messages.ts` and add the Zod schema + type export.
 
 Place it in the correct section based on direction:
 - **Gateway -> Service:** after the existing gateway messages (before `GatewayMessageSchema`)
@@ -56,16 +28,16 @@ export const MyNewMessageSchema = z.object({
 export type MyNewMessage = z.infer<typeof MyNewMessageSchema>;
 ```
 
-## 3. Add to the discriminated union
+## 2. Add to the discriminated union
 
-In the same file (`packages/types/src/messages.ts`), add the new schema to the appropriate `z.discriminatedUnion("type", [...])`:
+In the same file (`gateway/src/types/messages.ts`), add the new schema to the appropriate `z.discriminatedUnion("type", [...])`:
 
 - **Gateway -> Service:** add to `GatewayMessageSchema`
 - **Service -> Gateway:** add to `ServiceMessageSchema`
 
-## 4. Re-export from index.ts
+## 3. Re-export from index.ts
 
-Open `packages/types/src/index.ts` and add the schema and type to the re-exports from `"./messages.js"`:
+Open `gateway/src/types/index.ts` and add the schema and type to the re-exports from `"./messages.js"`:
 
 ```ts
 export {
@@ -75,9 +47,9 @@ export {
 } from "./messages.js";
 ```
 
-## 5. Update the protocol README
+## 4. Update the protocol spec
 
-Open `protocol/README.md` and add documentation for the new message type.
+Open `spec/protocol.md` and add documentation for the new message type.
 
 Add it under the appropriate section ("Gateway -> Service" or "Service -> Gateway"):
 
@@ -94,9 +66,9 @@ Description of the message.
 
 If the message changes the connection lifecycle, update the ASCII diagram at the top.
 
-## 6. Add tests
+## 5. Add tests
 
-Open `packages/types/src/__tests__/messages.test.ts` and add tests.
+Open `gateway/src/__tests__/messages.test.ts` and add tests.
 
 Add in the appropriate `describe` block ("Gateway -> Service messages" or "Service -> Gateway messages"):
 
@@ -121,18 +93,17 @@ it("rejects my_new with missing field1", () => {
 });
 ```
 
-## 7. Run checks
+## 6. Run checks
 
 ```bash
-pnpm build         # Types package must build before gateway
+pnpm build         # Build the gateway
 pnpm test          # Run all tests
 pnpm typecheck     # Verify types compile
 ```
 
 ## Key files
 
-- `protocol/schemas/messages.schema.json` — JSON Schema definitions
-- `protocol/README.md` — protocol documentation
-- `packages/types/src/messages.ts` — Zod schemas and discriminated unions
-- `packages/types/src/index.ts` — re-exports
-- `packages/types/src/__tests__/messages.test.ts` — message parsing tests
+- `spec/protocol.md` — Protocol specification
+- `gateway/src/types/messages.ts` — Zod schemas and discriminated unions
+- `gateway/src/types/index.ts` — Re-exports
+- `gateway/src/__tests__/messages.test.ts` — Message parsing tests

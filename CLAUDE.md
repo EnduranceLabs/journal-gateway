@@ -1,30 +1,32 @@
 # Architecture
 
 ## Core Principle
-The gateway core (`packages/gateway/`) is a stable, minimal library. It CANNOT be updated
-once deployed. Keep it small. No built-in integrations, no MCP code, no CLI logic.
+Single `gateway/` package. No monorepo. Keep it simple — it's one product.
 
-## Four-Layer Architecture
-- `packages/types/` — Protocol types (Zod schemas). Integration is the umbrella type
-  that can carry tools, skills, or both. Stable.
-- `packages/gateway/` — Core connection library. Accepts a single IntegrationProvider
-  interface. Handles WebSocket, authentication, registration, tool call routing,
-  reconnection. Stable.
-- `packages/skills/` — Skill loading from Markdown files. Returns Integration[] with
-  skills embedded. Orthogonal to MCP — skills are prompt templates, not callable tools.
-- `packages/mcp/` — MCP integration provider + CLI. Implements IntegrationProvider by
-  spawning MCP server subprocesses. Contains the built-in integration catalog and CLI
-  entry point. Composes McpRuntime + SkillLoader into a unified provider.
+## Structure
+- `gateway/src/types/` — Protocol types (Zod schemas). Integration is the umbrella type
+  that can carry tools, skills, or both.
+- `gateway/src/common/` — Shared utilities (logger).
+- `gateway/src/connection.ts` — WebSocket connection to Journal service. Handles
+  authentication, registration, tool call routing, reconnection.
+- `gateway/src/runtime.ts` — Runtime that manages MCP clients and skills. Implements
+  IntegrationProvider.
+- `gateway/src/mcp-client.ts` — Spawns and manages individual MCP server subprocesses.
+- `gateway/src/skill-client.ts` — Loads skill files (raw Markdown) from a directory.
+- `gateway/src/config.ts` — Configuration parsing from environment variables.
+- `gateway/src/main.ts` — CLI entry point.
 
-## Adding Integrations
-New integrations go in `packages/mcp/src/integrations/`. NEVER modify `packages/gateway/`.
+## Adding MCP Servers
+Users configure MCP servers via the `MCP_SERVERS` environment variable (JSON array).
+No built-in catalog — all MCP servers are user-configured.
 
 ## Adding Skills
-Skill files (Markdown with YAML front matter) go in the directory specified by `SKILLS_DIR`.
-See `spec/skills.md` for the file format.
+Skill files (raw Markdown) go in the directory specified by `SKILLS_DIR`.
+Skills are `{ id, content }` — the id is derived from the filename, content is the
+raw file contents. No YAML parsing at the gateway level.
 
 ## IntegrationProvider Interface
-External code implements this interface to provide capabilities to the gateway:
+The Runtime implements this interface to provide capabilities to the connection:
 - `getRegistrations()` — return available integrations (each may have tools, skills, or both)
 - `callTool(integrationId, toolName, args)` — execute a tool call
 - `start()` / `stop()` — lifecycle management

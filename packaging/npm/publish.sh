@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "Building all packages..."
-pnpm build
+echo "Building gateway..."
+cd gateway && pnpm build && cd ..
 
-echo "Publishing @journal/mcp to npm..."
-pnpm --filter @journal/mcp publish --access public --no-git-checks
+echo "Publishing @journal/gateway to npm..."
+cd gateway && pnpm publish --access public --no-git-checks
 
 echo "Done."

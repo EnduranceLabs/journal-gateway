@@ -14,29 +14,19 @@ Both tools and skills travel inside `Integration` objects. An integration can ca
 
 ## Skill Schema
 
-The canonical definition is the `SkillSchema` Zod type in `packages/types/src/skills.ts`.
+The canonical definition is the `SkillSchema` Zod type in `gateway/src/types/skills.ts`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | `string` | yes | Unique identifier (derived from filename) |
-| `name` | `string` | yes | Display name |
-| `description` | `string` | yes | Short description of what the skill does |
-| `instructions` | `string` | yes | Full prompt instructions for the agent |
-| `metadata` | `object` | no | Optional categorization |
-| `metadata.tags` | `string[]` | no | Tags for filtering/discovery |
-| `metadata.category` | `string` | no | Skill category |
+| `content` | `string` | yes | Raw Markdown content |
 
 ## Skill File Format
 
-Skills are authored as Markdown files with YAML front matter. Each `.md` file in the skills directory becomes one skill.
+Skills are authored as Markdown files. Each `.md` file in the skills directory becomes one skill. The `id` is derived from the filename (without `.md` extension), and the `content` is the raw file contents.
 
 ```markdown
----
-name: Review PR
-description: Reviews a pull request for code quality
-tags: code-review, git
-category: development
----
+# Review PR
 
 You are reviewing a pull request. Follow these steps:
 
@@ -46,22 +36,7 @@ You are reviewing a pull request. Follow these steps:
 4. Summarize your review with an overall assessment
 ```
 
-### Field mapping
-
-| Source | Skill field |
-|--------|------------|
-| Filename (without `.md`) | `id` |
-| Front matter `name` | `name` |
-| Front matter `description` | `description` |
-| Front matter `tags` (comma-separated) | `metadata.tags` |
-| Front matter `category` | `metadata.category` |
-| Markdown body | `instructions` |
-
-### Requirements
-
-- `name` and `description` are required in the front matter
-- The Markdown body (instructions) must be non-empty
-- Files missing any of these are silently skipped
+The gateway does not parse or interpret skill content — it passes the raw Markdown to the service, which makes skills available to agents.
 
 ## Configuration
 
@@ -75,7 +50,7 @@ SKILLS_DIR=/opt/journal/skills journal-gateway
 |----------|----------|---------|-------------|
 | `SKILLS_DIR` | no | — | Path to directory containing `.md` skill files |
 
-At least one of `INTEGRATIONS` or `SKILLS_DIR` must be set. The gateway can run with only skills (no integrations) or with both.
+At least one of `MCP_SERVERS` or `SKILLS_DIR` must be set. The gateway can run with only skills (no MCP servers) or with both.
 
 ## How Skills Flow
 
@@ -83,13 +58,13 @@ At least one of `INTEGRATIONS` or `SKILLS_DIR` must be set. The gateway can run 
 Skill files (.md)
       │
       ▼
- SkillLoader.load()         ← reads directory, parses front matter
+ SkillClient.load()         ← reads directory, returns { id, content }[]
       │
       ▼
- SkillLoader.getIntegrations()  ← returns Integration[] with skills inside
+ SkillClient.getIntegrations()  ← returns Integration[] with skills inside
       │
       ▼
- IntegrationProvider         ← merges skill integrations with tool integrations
+ Runtime                     ← merges skill integrations with MCP integrations
       │
       ▼
  GatewayConnection           ← sends unified `register` message
@@ -98,20 +73,9 @@ Skill files (.md)
  Journal Service             ← makes skills available to agents
 ```
 
-1. At startup, `SkillLoader` reads all `.md` files from `SKILLS_DIR`
-2. It parses YAML front matter and Markdown body into `Skill` objects
+1. At startup, `SkillClient` reads all `.md` files from `SKILLS_DIR`
+2. Each file becomes a `{ id, content }` skill (id from filename, content is raw file)
 3. `getIntegrations()` wraps the skills into an `Integration` object (with `tools: []` and `skills: [...]`)
-4. The CLI composes a unified `IntegrationProvider` that merges MCP integrations with skill integrations
+4. The `Runtime` merges MCP integrations with skill integrations
 5. During connection, `GatewayConnection` calls `getRegistrations()` and sends all integrations in the `register` message
 6. The service makes these skills available to agents in the organization
-
-## Architecture
-
-Skills are bundled as an integration. The `SkillLoader` in `packages/skills/` loads Markdown files and returns them as an `Integration` object with skills attached. The CLI in `packages/mcp/` composes this with MCP tool integrations into a single `IntegrationProvider`.
-
-```
-packages/types/     ← Skill Zod schema + Integration schema (with optional skills)
-packages/gateway/   ← IntegrationProvider interface (skills travel inside integrations)
-packages/skills/    ← SkillLoader implementation (returns Integration[])
-packages/mcp/       ← CLI composes SkillLoader + McpRuntime into one provider
-```
