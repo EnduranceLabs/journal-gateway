@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SkillRuntime, SkillNotFoundError } from "../skill-runtime.js";
 import type { GatewayConfig } from "../config.js";
-import { BUILT_IN_SKILLS } from "../config.js";
+import { BUILT_IN_SKILLS } from "../skills/index.js";
 
 // Mock McpProcess
 vi.mock("../mcp-process.js", () => {

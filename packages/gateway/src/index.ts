@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { parseConfig } from "./config.js";
+import { BUILT_IN_SKILLS } from "./skills/index.js";
 import { SkillRuntime } from "./skill-runtime.js";
 import { GatewayConnection } from "./connection.js";
 import { Logger } from "./logger.js";
@@ -10,10 +11,11 @@ export { SkillRuntime } from "./skill-runtime.js";
 export { McpProcess } from "./mcp-process.js";
 export { parseConfig } from "./config.js";
 export type { GatewayConfig, SkillDefinition } from "./config.js";
+export { BUILT_IN_SKILLS } from "./skills/index.js";
 export { Logger } from "./logger.js";
 
 async function main(): Promise<void> {
-  const config = parseConfig();
+  const config = parseConfig(BUILT_IN_SKILLS);
   const logger = new Logger(config.logLevel);
 
   logger.info("Starting Journal Gateway", {

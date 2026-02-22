@@ -40,7 +40,8 @@ Protocol types defined with Zod schemas. Source files:
 ### `packages/gateway`
 
 Gateway runtime. Source files:
-- `src/config.ts` — `BUILT_IN_SKILLS` registry, `parseConfig` with Zod validation
+- `src/config.ts` — `SkillDefinition` interface and `parseConfig` with Zod validation
+- `src/skills/` — Built-in skill catalog (one file per skill, barrel-exported via `skills/index.ts`)
 - `src/mcp-process.ts` — Spawns MCP server subprocesses via `@modelcontextprotocol/sdk`
 - `src/skill-runtime.ts` — Manages skill lifecycle (start, list tools, call tools)
 - `src/connection.ts` — WebSocket connection to Journal service with reconnection
