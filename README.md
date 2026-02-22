@@ -83,7 +83,7 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token \
 
 Each `.md` file becomes a skill with `id` derived from the filename and `content` as the raw file contents.
 
-See [spec/skills.md](./spec/skills.md) for the full specification.
+See the Skill data type in [spec/protocol.md](./spec/protocol.md) for the wire format.
 
 ## Architecture
 
@@ -123,7 +123,7 @@ The gateway connects outbound to the Journal service over WebSocket. It manages 
 
 ## Protocol
 
-The gateway communicates with Journal over WebSocket using a simple JSON protocol. See [spec/protocol.md](./spec/protocol.md) for the full specification, [spec/integrations.md](./spec/integrations.md) for integrations, and [spec/skills.md](./spec/skills.md) for skills.
+The gateway communicates with Journal over WebSocket using a simple JSON protocol. See [spec/protocol.md](./spec/protocol.md) for the full specification.
 
 ## Development
 
