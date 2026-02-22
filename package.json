@@ -9,8 +9,5 @@
     "build": "cd gateway && pnpm build",
     "test": "cd gateway && pnpm test",
     "typecheck": "cd gateway && pnpm typecheck"
-  },
-  "devDependencies": {
-    "prettier": "^3"
   }
 }
