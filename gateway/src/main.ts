@@ -6,7 +6,7 @@ import { GatewayConnection } from "./connection.js";
 import { Logger } from "./common/logger.js";
 
 async function main(): Promise<void> {
-  const config = parseConfig();
+  const config = parseConfig(process.env, process.argv);
   const logger = new Logger(config.logLevel);
 
   logger.info("Starting Journal Gateway", {

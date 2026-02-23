@@ -13,17 +13,16 @@ Single `gateway/` package. No monorepo. Keep it simple — it's one product.
   IntegrationProvider.
 - `gateway/src/mcp-client.ts` — Spawns and manages individual MCP server subprocesses.
 - `gateway/src/skill-client.ts` — Loads skill files (raw Markdown) from a directory.
-- `gateway/src/config.ts` — Configuration parsing from environment variables.
+- `gateway/src/config.ts` — Parses operational env vars and loads the gateway config file
+  (`--config` or `JOURNAL_GATEWAY_CONFIG`). Validates with Zod, resolves envVars mappings.
 - `gateway/src/main.ts` — CLI entry point.
 
-## Adding MCP Servers
-Users configure MCP servers via the `MCP_SERVERS` environment variable (JSON array).
-No built-in catalog — all MCP servers are user-configured.
-
-## Adding Skills
-Skill files (raw Markdown) go in the directory specified by `SKILLS_DIR`.
-Skills are `{ id, content }` — the id is derived from the filename, content is the
-raw file contents. No YAML parsing at the gateway level.
+## Gateway Config File
+All MCP servers and skills are configured via a single JSON config file with two top-level
+fields: `mcpServers` (array of server definitions) and `skillsDir` (path string).
+The config file is pointed to by `--config <path>` CLI arg or `JOURNAL_GATEWAY_CONFIG`
+env var (file path or inline JSON). Secrets stay in real env vars — the `envVars` mapping
+in each server definition resolves from the host environment at startup.
 
 ## Client Libraries
 - `clients/typescript/` — `@journal/gateway-client` npm package. Implements the
