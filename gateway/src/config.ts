@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { readFileSync } from "node:fs";
-import type { GatewayConfig } from "./types/index.js";
+import type { GatewayConfig } from "@journal/gateway-protocol";
 
 export interface McpServerConfig {
   id: string;

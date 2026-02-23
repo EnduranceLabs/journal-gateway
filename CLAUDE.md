@@ -1,11 +1,13 @@
 # Architecture
 
 ## Core Principle
-Single `gateway/` package. No monorepo. Keep it simple — it's one product.
+Small workspace: `protocol/` for shared types, `gateway/` for the runtime, client
+libraries for the service side. Keep it simple.
 
 ## Structure
-- `gateway/src/types/` — Protocol types (Zod schemas). Integration is the umbrella type
-  that can carry tools, skills, or both.
+- `protocol/` — `@journal/gateway-protocol` package. Pure Zod schemas and TypeScript
+  types shared by both gateway and client libraries (Integration, ToolResult, message
+  schemas, IntegrationProvider, GatewayConfig, errors).
 - `gateway/src/common/` — Shared utilities (logger).
 - `gateway/src/connection.ts` — WebSocket connection to Journal service. Handles
   authentication, registration, tool call routing, reconnection.

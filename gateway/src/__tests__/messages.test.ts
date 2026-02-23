@@ -12,7 +12,7 @@ import {
   RegisteredMessageSchema,
   ToolCallMessageSchema,
   PingMessageSchema,
-} from "../types/messages.js";
+} from "@journal/gateway-protocol";
 
 describe("Gateway → Service messages", () => {
   it("parses authenticate message", () => {

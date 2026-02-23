@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Runtime } from "../runtime.js";
-import { IntegrationNotFoundError } from "../types/index.js";
+import { IntegrationNotFoundError } from "@journal/gateway-protocol";
 import type { RuntimeConfig, McpServerConfig } from "../config.js";
 
 // Mock McpClient
