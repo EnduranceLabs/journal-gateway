@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, basename } from "node:path";
-import type { Skill, Integration } from "./types/index.js";
+import type { Skill, Integration } from "@journal/gateway-protocol";
 
 export class SkillClient {
   private skills: Skill[] = [];

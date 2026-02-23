@@ -10,11 +10,11 @@ export type {
   GatewayErrorCode,
   GatewayMessage,
   ServiceMessage,
-} from "@journal/gateway";
+} from "@journal/gateway-protocol";
 
 export {
   GatewayMessageSchema,
   ServiceMessageSchema,
   IntegrationSchema,
   ToolResultSchema,
-} from "@journal/gateway";
+} from "@journal/gateway-protocol";

@@ -1,12 +1,13 @@
 import WebSocket from "ws";
 import {
   ServiceMessageSchema,
+  IntegrationNotFoundError,
   type GatewayMessage,
   type ServiceMessage,
   type GatewayErrorCode,
-} from "./types/index.js";
-import type { IntegrationProvider, GatewayConfig } from "./types/index.js";
-import { IntegrationNotFoundError } from "./types/index.js";
+  type IntegrationProvider,
+  type GatewayConfig,
+} from "@journal/gateway-protocol";
 import { Logger } from "./common/logger.js";
 import { VERSION } from "./version.js";
 

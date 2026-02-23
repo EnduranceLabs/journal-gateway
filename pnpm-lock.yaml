@@ -10,9 +10,9 @@ importers:
 
   clients/typescript:
     dependencies:
-      '@journal/gateway':
+      '@journal/gateway-protocol':
         specifier: workspace:*
-        version: link:../../gateway
+        version: link:../../protocol
       ws:
         specifier: ^8
         version: 8.19.0
@@ -35,6 +35,9 @@ importers:
 
   gateway:
     dependencies:
+      '@journal/gateway-protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@modelcontextprotocol/sdk':
         specifier: ^1.12
         version: 1.26.0(zod@3.25.76)
@@ -57,6 +60,16 @@ importers:
       vitest:
         specifier: ^3
         version: 3.2.4(@types/node@22.19.11)
+
+  protocol:
+    dependencies:
+      zod:
+        specifier: ^3.24
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7
+        version: 5.9.3
 
   testing/integration/ts:
     dependencies:

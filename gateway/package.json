@@ -2,8 +2,7 @@
   "name": "@journal/gateway",
   "version": "0.1.0",
   "type": "module",
-  "main": "./dist/types/index.js",
-  "types": "./dist/types/index.d.ts",
+  "main": "./dist/main.js",
   "bin": {
     "journal-gateway": "./dist/main.js"
   },
@@ -13,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@journal/gateway-protocol": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12",
     "ws": "^8",
     "zod": "^3.24"

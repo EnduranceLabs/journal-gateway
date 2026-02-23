@@ -13,9 +13,7 @@ npm install -g @journal/gateway
 ## Usage
 
 ```bash
-JOURNAL_GATEWAY_TOKEN=gw_your_token \
-  SKILLS_DIR=/opt/journal/skills \
-  journal-gateway
+JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
 ```
 
 ## Configuration
@@ -24,11 +22,10 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token \
 |----------|----------|---------|-------------|
 | `JOURNAL_GATEWAY_TOKEN` | yes | — | Gateway auth token (`gw_*`) |
 | `JOURNAL_GATEWAY_URL` | no | `wss://gateway.journal.one/v1` | WebSocket endpoint |
-| `MCP_SERVERS` | no* | — | JSON array of MCP server configs |
-| `SKILLS_DIR` | no* | — | Path to skills directory |
+| `JOURNAL_GATEWAY_CONFIG` | no | — | Path to config file, or inline JSON |
 | `LOG_LEVEL` | no | `info` | `debug`, `info`, `warn`, `error` |
 
-*If neither is set, the gateway will connect but won't have any tools or skills available.
+The gateway reads its tool and skill definitions from a JSON config file. Pass it via `--config path/to/file.json` or the `JOURNAL_GATEWAY_CONFIG` env var.
 
 ## Documentation
 

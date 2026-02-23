@@ -64,6 +64,7 @@ class GatewayError:
 @dataclass
 class ConnectedGateway:
     id: str
+    organization_id: str
     protocol_version: int
     gateway_version: str
     integrations: list[Integration]

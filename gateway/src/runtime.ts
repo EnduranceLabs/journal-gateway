@@ -1,6 +1,9 @@
-import type { Integration, ToolResult } from "./types/index.js";
-import type { IntegrationProvider } from "./types/index.js";
-import { IntegrationNotFoundError } from "./types/index.js";
+import {
+  IntegrationNotFoundError,
+  type Integration,
+  type ToolResult,
+  type IntegrationProvider,
+} from "@journal/gateway-protocol";
 import { Logger } from "./common/logger.js";
 import type { RuntimeConfig } from "./config.js";
 import { McpClient } from "./mcp-client.js";

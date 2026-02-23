@@ -20,6 +20,11 @@ async def _validate_token(token: str) -> TokenValidationResult | None:
             organization_id="org_1",
             organization_name="Test Org",
         )
+    if token == "gw_org2":
+        return TokenValidationResult(
+            organization_id="org_2",
+            organization_name="Other Org",
+        )
     return None
 
 
@@ -80,6 +85,7 @@ async def test_accepts_valid_token(server: GatewayServer):
     ws = await connect_and_auth(server.url, "gw_valid")
     await register(ws)
     assert len(server.connected_gateways) == 1
+    assert server.connected_gateways[0].organization_id == "org_1"
     assert server.connected_gateways[0].protocol_version == 1
     assert server.connected_gateways[0].gateway_version == "0.1.0-test"
     await ws.close()
@@ -204,3 +210,149 @@ async def test_concurrent_tool_calls(server: GatewayServer):
 
     handler.cancel()
     await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_available_tools(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await register(ws, [TEST_INTEGRATION])
+
+    assert server.available_tools == [
+        {"integrationId": "test-integration", "name": "echo", "description": "Echo tool"},
+        {"integrationId": "test-integration", "name": "fail", "description": "Fail tool"},
+    ]
+    await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_has_gateway_for_org(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await register(ws)
+
+    assert server.has_gateway_for_org("org_1") is True
+    assert server.has_gateway_for_org("org_nonexistent") is False
+    await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_get_gateways_for_org(server: GatewayServer):
+    ws1 = await connect_and_auth(server.url, "gw_valid")
+    await register(ws1, [TEST_INTEGRATION])
+
+    ws2 = await connect_and_auth(server.url, "gw_org2")
+    await register(ws2, [TEST_INTEGRATION])
+
+    org1_gateways = server.get_gateways_for_org("org_1")
+    assert len(org1_gateways) == 1
+    assert org1_gateways[0].organization_id == "org_1"
+
+    org2_gateways = server.get_gateways_for_org("org_2")
+    assert len(org2_gateways) == 1
+    assert org2_gateways[0].organization_id == "org_2"
+
+    assert server.get_gateways_for_org("org_nonexistent") == []
+
+    await ws1.close()
+    await ws2.close()
+
+
+@pytest.mark.asyncio
+async def test_get_tools_for_org(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await register(ws, [TEST_INTEGRATION])
+
+    tools = server.get_tools_for_org("org_1")
+    assert len(tools) == 2
+    assert tools[0]["integrationId"] == "test-integration"
+    assert tools[0]["tool"].name == "echo"
+    assert tools[1]["tool"].name == "fail"
+
+    assert server.get_tools_for_org("org_nonexistent") == []
+    await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_get_tools_for_org_deduplicates(server: GatewayServer):
+    """Two gateways for the same org with the same integration should deduplicate tools."""
+    ws1 = await connect_and_auth(server.url, "gw_valid")
+    await register(ws1, [TEST_INTEGRATION])
+
+    ws2 = await connect_and_auth(server.url, "gw_valid")
+    await register(ws2, [TEST_INTEGRATION])
+
+    tools = server.get_tools_for_org("org_1")
+    assert len(tools) == 2  # deduplicated, not 4
+    await ws1.close()
+    await ws2.close()
+
+
+@pytest.mark.asyncio
+async def test_call_tool_for_org(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await register(ws, [TEST_INTEGRATION])
+
+    async def handle_calls():
+        async for raw in ws:
+            msg = json.loads(raw)
+            if msg["type"] == "tool_call":
+                await ws.send(json.dumps({
+                    "type": "tool_result",
+                    "requestId": msg["requestId"],
+                    "result": {
+                        "content": [{"type": "text", "text": "org-result"}],
+                    },
+                }))
+
+    handler = asyncio.create_task(handle_calls())
+
+    result = await server.call_tool_for_org("org_1", "test-integration", "echo", {})
+    assert result.content[0].text == "org-result"
+
+    handler.cancel()
+    await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_call_tool_for_org_no_match(server: GatewayServer):
+    with pytest.raises(LookupError, match="No gateway for org"):
+        await server.call_tool_for_org("org_nonexistent", "test-integration", "echo", {})
+
+
+@pytest.mark.asyncio
+async def test_pong_timeout_disconnects_gateway():
+    """Gateway that doesn't respond to pings should be disconnected."""
+    srv = GatewayServer(
+        validate_token=_validate_token,
+        port=0,
+        ping_interval=0.1,
+        pong_timeout=0.15,
+    )
+    await srv.start()
+
+    disconnected: list[ConnectedGateway] = []
+    srv.on_gateway_disconnected = lambda gw: disconnected.append(gw)
+
+    # Connect but never respond to pings
+    ws = await websockets.connect(srv.url, ping_interval=None, ping_timeout=None)
+    await ws.send(json.dumps({
+        "type": "authenticate",
+        "token": "gw_valid",
+        "protocolVersion": 1,
+        "gatewayVersion": "0.1.0-test",
+    }))
+    msg = json.loads(await ws.recv())
+    assert msg["type"] == "authenticated"
+
+    await ws.send(json.dumps({"type": "register", "integrations": []}))
+    msg = json.loads(await ws.recv())
+    assert msg["type"] == "registered"
+
+    assert len(srv.connected_gateways) == 1
+
+    # Wait for ping + pong timeout to fire
+    await asyncio.sleep(0.5)
+
+    assert len(srv.connected_gateways) == 0
+    assert len(disconnected) == 1
+
+    await srv.stop()
