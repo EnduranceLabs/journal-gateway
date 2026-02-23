@@ -1,5 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
-import type { Integration, ToolResult } from "./types.js";
+import type { Integration, ToolDefinition, ToolResult } from "./types.js";
 import { GatewayMessageSchema } from "./types.js";
 
 export interface TokenValidationResult {
@@ -15,6 +15,7 @@ export interface GatewayServerOptions {
 
 export interface ConnectedGateway {
   id: string;
+  organizationId: string;
   protocolVersion: number;
   gatewayVersion: string;
   integrations: Integration[];
@@ -169,9 +170,135 @@ export class GatewayServer {
     });
   }
 
+  /** Check if any gateway is connected for the given organization. */
+  hasGatewayForOrg(organizationId: string): boolean {
+    for (const { gateway } of this.gateways.values()) {
+      if (gateway.organizationId === organizationId) return true;
+    }
+    return false;
+  }
+
+  /** Get all connected gateways for an organization. */
+  getGatewaysForOrg(organizationId: string): ConnectedGateway[] {
+    const result: ConnectedGateway[] = [];
+    for (const { gateway } of this.gateways.values()) {
+      if (gateway.organizationId === organizationId) {
+        result.push(gateway);
+      }
+    }
+    return result;
+  }
+
+  /** Get deduplicated tools across all gateways for an organization. */
+  getToolsForOrg(
+    organizationId: string
+  ): Array<{ integrationId: string; tool: ToolDefinition }> {
+    const seen = new Set<string>();
+    const tools: Array<{ integrationId: string; tool: ToolDefinition }> = [];
+    for (const { gateway } of this.gateways.values()) {
+      if (gateway.organizationId !== organizationId) continue;
+      for (const integration of gateway.integrations) {
+        for (const tool of integration.tools) {
+          const key = `${integration.id}.${tool.name}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            tools.push({ integrationId: integration.id, tool });
+          }
+        }
+      }
+    }
+    return tools;
+  }
+
+  /**
+   * Call a tool on any gateway for the given organization that provides the
+   * requested integration. Picks a random candidate for load balancing and
+   * retries on a different one if the call fails with a connection error.
+   */
+  async callToolForOrg(
+    organizationId: string,
+    integrationId: string,
+    toolName: string,
+    args: Record<string, unknown>,
+    timeoutMs = 90_000
+  ): Promise<ToolResult> {
+    const candidates: GatewayEntry[] = [];
+    for (const entry of this.gateways.values()) {
+      if (
+        entry.gateway.organizationId === organizationId &&
+        entry.gateway.integrations.some((i) => i.id === integrationId)
+      ) {
+        candidates.push(entry);
+      }
+    }
+
+    if (candidates.length === 0) {
+      throw new Error(
+        `No gateway for org "${organizationId}" has integration "${integrationId}"`
+      );
+    }
+
+    // Shuffle candidates for load balancing
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    let lastError: Error | undefined;
+    for (const entry of candidates) {
+      try {
+        return await this.callToolOnEntry(
+          entry,
+          integrationId,
+          toolName,
+          args,
+          timeoutMs
+        );
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        // Only retry on connection-level errors
+        if (!lastError.message.includes("Gateway disconnected")) {
+          throw lastError;
+        }
+      }
+    }
+
+    throw lastError ?? new Error("All gateway candidates failed");
+  }
+
+  private callToolOnEntry(
+    entry: GatewayEntry,
+    integrationId: string,
+    toolName: string,
+    args: Record<string, unknown>,
+    timeoutMs: number
+  ): Promise<ToolResult> {
+    const requestId = `req_${++this.reqCounter}`;
+
+    return new Promise<ToolResult>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        entry.pending.delete(requestId);
+        reject(new Error(`Tool call timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      entry.pending.set(requestId, { resolve, reject, timer });
+
+      entry.ws.send(
+        JSON.stringify({
+          type: "tool_call",
+          requestId,
+          integrationId,
+          toolName,
+          arguments: args,
+        })
+      );
+    });
+  }
+
   private handleConnection(ws: WebSocket): void {
     const connId = `gw_${++this.connCounter}`;
     let authenticated = false;
+    let organizationId = "";
     let protocolVersion = 1;
     let gatewayVersion = "unknown";
 
@@ -195,6 +322,7 @@ export class GatewayServer {
           if (result) {
             clearTimeout(authTimer);
             authenticated = true;
+            organizationId = result.organizationId;
             protocolVersion = msg.protocolVersion;
             gatewayVersion = msg.gatewayVersion;
             ws.send(
@@ -244,6 +372,7 @@ export class GatewayServer {
 
           const gateway: ConnectedGateway = {
             id: connId,
+            organizationId,
             protocolVersion,
             gatewayVersion,
             integrations,
