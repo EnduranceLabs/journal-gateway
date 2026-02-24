@@ -10,7 +10,8 @@ libraries for the service side. Keep it simple.
   schemas, IntegrationProvider, GatewayConfig, errors).
 - `gateway/src/common/` — Shared utilities (logger).
 - `gateway/src/connection.ts` — WebSocket connection to Journal service. Handles
-  authentication, registration, tool call routing, reconnection.
+  authentication, registration, tool call routing, ping/pong, refresh_registrations,
+  and reconnection with exponential backoff.
 - `gateway/src/runtime.ts` — Runtime that manages MCP clients and skills. Implements
   IntegrationProvider.
 - `gateway/src/mcp-client.ts` — Spawns and manages individual MCP server subprocesses.

@@ -36,6 +36,10 @@ Gateway                                  Service
   |<-------- | ping ------------|----------|
   |--------- | pong ------------|---------->|
   |          |                  |           |
+  |<-------- | refresh_reg... --|----------|
+  |--------- | register -------|---------->|
+  |<-------- | registered -----|----------|
+  |          |                  |           |
   |          +------------------+           |
   |                                         |
 ```
@@ -44,6 +48,7 @@ Gateway                                  Service
 2. It sends an `authenticate` message with its token and version info.
 3. On success (`authenticated`), it sends a `register` message declaring all available integrations and their tools.
 4. The connection enters steady state: the service sends `tool_call` requests and `ping` heartbeats; the gateway responds with `tool_result`/`tool_error` and `pong`.
+5. At any time during steady state, the service may send `refresh_registrations` to request the gateway to re-send its integrations. The gateway responds with a standard `register` message. This allows the service to pick up tool/skill changes without a full reconnect.
 
 ## Message Reference
 
@@ -261,6 +266,18 @@ Heartbeat sent by the service.
 
 ```json
 { "type": "ping" }
+```
+
+#### `refresh_registrations`
+
+Requests the gateway to re-send its integrations. The gateway responds with a standard `register` message (which the service handles as a re-registration, updating integrations in-place without dropping pending tool calls).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"refresh_registrations"` | yes | Message discriminator |
+
+```json
+{ "type": "refresh_registrations" }
 ```
 
 ## Data Types
