@@ -79,6 +79,21 @@ describe("Integration: TS client <-> real gateway", () => {
     expect(server.connectedGateways).toHaveLength(1);
   });
 
+  it("service requests refresh, gateway re-registers with updated tools", async () => {
+    const gatewayId = server.connectedGateways[0].id;
+
+    const updated = new Promise<void>((resolve) => {
+      server.onGatewayUpdated = () => resolve();
+    });
+
+    server.requestRefreshRegistrations(gatewayId);
+    await updated;
+
+    // Gateway re-registered (same integrations but the callback fired)
+    expect(server.connectedGateways).toHaveLength(1);
+    expect(server.connectedGateways[0].id).toBe(gatewayId);
+  });
+
   it("detects gateway disconnect", async () => {
     let disconnected = false;
     server.onGatewayDisconnected = () => {

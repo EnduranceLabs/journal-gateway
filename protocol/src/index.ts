@@ -35,6 +35,7 @@ export {
   RegisteredMessageSchema,
   ToolCallMessageSchema,
   PingMessageSchema,
+  RefreshRegistrationsMessageSchema,
   ServiceMessageSchema,
   type AuthenticateMessage,
   type RegisterMessage,
@@ -47,6 +48,7 @@ export {
   type RegisteredMessage,
   type ToolCallMessage,
   type PingMessage,
+  type RefreshRegistrationsMessage,
   type ServiceMessage,
 } from "./messages.js";
 

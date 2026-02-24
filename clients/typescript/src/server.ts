@@ -83,6 +83,7 @@ export class GatewayServer {
   }
 
   onGatewayConnected?: (gateway: ConnectedGateway) => void;
+  onGatewayUpdated?: (gateway: ConnectedGateway) => void;
   onGatewayDisconnected?: (gateway: ConnectedGateway) => void;
 
   async start(): Promise<void> {
@@ -208,6 +209,23 @@ export class GatewayServer {
       }
     }
     return tools;
+  }
+
+  /** Send refresh_registrations to a specific gateway. */
+  requestRefreshRegistrations(gatewayId: string): void {
+    const entry = this.gateways.get(gatewayId);
+    if (entry) {
+      entry.ws.send(JSON.stringify({ type: "refresh_registrations" }));
+    }
+  }
+
+  /** Send refresh_registrations to all gateways for an organization. */
+  requestRefreshRegistrationsForOrg(organizationId: string): void {
+    for (const entry of this.gateways.values()) {
+      if (entry.gateway.organizationId === organizationId) {
+        entry.ws.send(JSON.stringify({ type: "refresh_registrations" }));
+      }
+    }
   }
 
   /**
@@ -370,23 +388,30 @@ export class GatewayServer {
             })
           );
 
-          const gateway: ConnectedGateway = {
-            id: connId,
-            organizationId,
-            protocolVersion,
-            gatewayVersion,
-            integrations,
-          };
+          const existing = this.gateways.get(connId);
+          if (existing) {
+            // Re-register: update integrations in-place, preserve pending calls
+            existing.gateway.integrations = integrations;
+            this.onGatewayUpdated?.(existing.gateway);
+          } else {
+            const gateway: ConnectedGateway = {
+              id: connId,
+              organizationId,
+              protocolVersion,
+              gatewayVersion,
+              integrations,
+            };
 
-          const entry: GatewayEntry = {
-            ws,
-            gateway,
-            pending: new Map(),
-            pongTimer: null,
-          };
+            const entry: GatewayEntry = {
+              ws,
+              gateway,
+              pending: new Map(),
+              pongTimer: null,
+            };
 
-          this.gateways.set(connId, entry);
-          this.onGatewayConnected?.(gateway);
+            this.gateways.set(connId, entry);
+            this.onGatewayConnected?.(gateway);
+          }
           break;
         }
 

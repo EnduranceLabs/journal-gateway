@@ -111,6 +111,7 @@ class GatewayServer:
         self._gateways: dict[str, _GatewayConn] = {}
         self._next_id = 0
         self.on_gateway_connected: Callable[[ConnectedGateway], None] | None = None
+        self.on_gateway_updated: Callable[[ConnectedGateway], None] | None = None
         self.on_gateway_disconnected: Callable[[ConnectedGateway], None] | None = None
 
     @property
@@ -241,6 +242,18 @@ class GatewayServer:
                     raise
         raise last_error  # type: ignore[misc]
 
+    async def request_refresh_registrations(self, gateway_id: str) -> None:
+        """Send refresh_registrations to a specific gateway."""
+        gw = self._gateways.get(gateway_id)
+        if gw:
+            await gw.ws.send(json.dumps({"type": "refresh_registrations"}))
+
+    async def request_refresh_registrations_for_org(self, organization_id: str) -> None:
+        """Send refresh_registrations to all gateways for an organization."""
+        for gw in self._gateways.values():
+            if gw.info.organization_id == organization_id:
+                await gw.ws.send(json.dumps({"type": "refresh_registrations"}))
+
     async def _handle_connection(self, ws: websockets.asyncio.server.ServerConnection) -> None:
         self._next_id += 1
         conn_id = f"gw_{self._next_id}"
@@ -328,6 +341,19 @@ class GatewayServer:
                         gw_conn.resolve_error(msg["requestId"], error)
                     elif msg_type == "pong":
                         gw_conn.pong_received.set()
+                    elif msg_type == "register":
+                        integrations = self._parse_integrations(msg.get("integrations", []))
+                        tool_count = sum(len(i.tools) for i in integrations)
+                        skill_count = sum(len(i.skills) for i in integrations)
+                        await ws.send(json.dumps({
+                            "type": "registered",
+                            "integrationCount": len(integrations),
+                            "toolCount": tool_count,
+                            "skillCount": skill_count,
+                        }))
+                        gw_conn.info.integrations = integrations
+                        if self.on_gateway_updated:
+                            self.on_gateway_updated(gw_conn.info)
             finally:
                 if ping_task:
                     ping_task.cancel()

@@ -94,12 +94,19 @@ export const PingMessageSchema = z.object({
 
 export type PingMessage = z.infer<typeof PingMessageSchema>;
 
+export const RefreshRegistrationsMessageSchema = z.object({
+  type: z.literal("refresh_registrations"),
+});
+
+export type RefreshRegistrationsMessage = z.infer<typeof RefreshRegistrationsMessageSchema>;
+
 export const ServiceMessageSchema = z.discriminatedUnion("type", [
   AuthenticatedMessageSchema,
   AuthErrorMessageSchema,
   RegisteredMessageSchema,
   ToolCallMessageSchema,
   PingMessageSchema,
+  RefreshRegistrationsMessageSchema,
 ]);
 
 export type ServiceMessage = z.infer<typeof ServiceMessageSchema>;
