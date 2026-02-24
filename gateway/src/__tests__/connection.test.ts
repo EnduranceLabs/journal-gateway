@@ -212,6 +212,47 @@ describe("GatewayConnection", () => {
     await conn.close();
   });
 
+  it("responds to refresh_registrations by sending a new register message", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    const connectPromise = conn.connect();
+
+    await new Promise((r) => setTimeout(r, 10));
+    const ws = mockWsInstances[0];
+
+    // Complete connection
+    ws.emit("message", JSON.stringify({
+      type: "authenticated",
+      organizationId: "org_123",
+    }));
+    await new Promise((r) => setTimeout(r, 10));
+    ws.emit("message", JSON.stringify({
+      type: "registered",
+      integrationCount: 1,
+      toolCount: 1,
+    }));
+    await connectPromise;
+
+    // Clear sent messages to isolate the refresh response
+    ws.sent.length = 0;
+
+    // Send refresh_registrations
+    ws.emit("message", JSON.stringify({ type: "refresh_registrations" }));
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(ws.sent).toHaveLength(1);
+    const registerMsg = JSON.parse(ws.sent[0]);
+    expect(registerMsg.type).toBe("register");
+    expect(registerMsg.integrations).toHaveLength(1);
+    expect(registerMsg.integrations[0].id).toBe("postgresql");
+
+    // Verify provider.getRegistrations was called again
+    expect(provider.getRegistrations).toHaveBeenCalledTimes(2);
+
+    await conn.close();
+  });
+
   it("ignores invalid messages gracefully", async () => {
     const provider = createMockProvider();
     const conn = new GatewayConnection(config, provider);

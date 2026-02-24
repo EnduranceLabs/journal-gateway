@@ -236,6 +236,93 @@ describe("GatewayServer", () => {
     ws.close();
   });
 
+  it("re-register updates integrations without losing pending tool calls", async () => {
+    const ws = await connectAndAuth(server.url, "gw_valid");
+    await register(ws, [TEST_INTEGRATION]);
+
+    // Start a tool call but don't resolve it yet
+    let toolCallMsg: any = null;
+    ws.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "tool_call") {
+        toolCallMsg = msg;
+      }
+    });
+
+    const callPromise = server.callTool("test-integration", "echo", { hello: "world" });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(toolCallMsg).not.toBeNull();
+
+    // Re-register with updated integrations (new tool added)
+    const updatedIntegration = {
+      ...TEST_INTEGRATION,
+      tools: [
+        ...TEST_INTEGRATION.tools,
+        { name: "new_tool", description: "New tool", inputSchema: {} },
+      ],
+    };
+    await register(ws, [updatedIntegration]);
+
+    // The pending tool call should still be resolvable
+    ws.send(
+      JSON.stringify({
+        type: "tool_result",
+        requestId: toolCallMsg.requestId,
+        result: { content: [{ type: "text", text: "resolved" }] },
+      })
+    );
+
+    const result = await callPromise;
+    expect(result.content[0]).toEqual({ type: "text", text: "resolved" });
+
+    // Verify the integrations are updated
+    expect(server.connectedGateways[0].integrations[0].tools).toHaveLength(3);
+    ws.close();
+  });
+
+  it("fires onGatewayUpdated on re-register, not onGatewayConnected", async () => {
+    let connectedCount = 0;
+    let updatedCount = 0;
+    let updatedGateway: ConnectedGateway | null = null;
+    server.onGatewayConnected = () => { connectedCount++; };
+    server.onGatewayUpdated = (gw) => { updatedCount++; updatedGateway = gw; };
+
+    const ws = await connectAndAuth(server.url, "gw_valid");
+    await register(ws, [TEST_INTEGRATION]);
+    expect(connectedCount).toBe(1);
+    expect(updatedCount).toBe(0);
+
+    // Re-register
+    await register(ws, [TEST_INTEGRATION]);
+    expect(connectedCount).toBe(1); // Should NOT increment
+    expect(updatedCount).toBe(1);
+    expect(updatedGateway).not.toBeNull();
+    expect(updatedGateway!.id).toBeTruthy();
+    ws.close();
+  });
+
+  it("requestRefreshRegistrations sends the message to a gateway", async () => {
+    const ws = await connectAndAuth(server.url, "gw_valid");
+    await register(ws, [TEST_INTEGRATION]);
+
+    const gatewayId = server.connectedGateways[0].id;
+
+    const msgPromise = new Promise<any>((resolve) => {
+      ws.on("message", (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === "refresh_registrations") {
+          resolve(msg);
+        }
+      });
+    });
+
+    server.requestRefreshRegistrations(gatewayId);
+
+    const msg = await msgPromise;
+    expect(msg.type).toBe("refresh_registrations");
+    ws.close();
+  });
+
   it("availableTools aggregates across integrations", async () => {
     const ws = await connectAndAuth(server.url, "gw_valid");
     await register(ws, [TEST_INTEGRATION]);

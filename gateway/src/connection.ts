@@ -134,6 +134,13 @@ export class GatewayConnection {
             this.send({ type: "pong" });
             break;
           }
+
+          case "refresh_registrations": {
+            this.logger.info("Service requested registration refresh");
+            const refreshed = await this.provider.getRegistrations();
+            this.send({ type: "register", integrations: refreshed });
+            break;
+          }
         }
       });
 

@@ -225,6 +225,101 @@ async def test_available_tools(server: GatewayServer):
 
 
 @pytest.mark.asyncio
+async def test_reregister_updates_integrations_without_losing_pending(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await register(ws, [TEST_INTEGRATION])
+
+    # Start a tool call but don't resolve it yet
+    tool_call_msg = None
+
+    async def capture_call():
+        nonlocal tool_call_msg
+        raw = await ws.recv()
+        msg = json.loads(raw)
+        if msg["type"] == "tool_call":
+            tool_call_msg = msg
+
+    call_future = asyncio.ensure_future(
+        server.call_tool("test-integration", "echo", {"hello": "world"})
+    )
+    await asyncio.sleep(0.05)
+    # Drain the tool_call message from the websocket
+    raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
+    tool_call_msg = json.loads(raw)
+    assert tool_call_msg["type"] == "tool_call"
+
+    # Re-register with updated integrations (new tool added)
+    updated = {
+        **TEST_INTEGRATION,
+        "tools": TEST_INTEGRATION["tools"] + [
+            {"name": "new_tool", "description": "New tool", "inputSchema": {}},
+        ],
+    }
+    await register(ws, [updated])
+
+    # The pending tool call should still be resolvable
+    await ws.send(json.dumps({
+        "type": "tool_result",
+        "requestId": tool_call_msg["requestId"],
+        "result": {
+            "content": [{"type": "text", "text": "resolved"}],
+        },
+    }))
+
+    result = await call_future
+    assert result.content[0].text == "resolved"
+
+    # Verify the integrations are updated
+    assert len(server.connected_gateways[0].integrations[0].tools) == 3
+
+
+@pytest.mark.asyncio
+async def test_on_gateway_updated_fires_on_reregister(server: GatewayServer):
+    connected_count = 0
+    updated_count = 0
+    updated_gateways: list[ConnectedGateway] = []
+
+    def on_connected(gw):
+        nonlocal connected_count
+        connected_count += 1
+
+    def on_updated(gw):
+        nonlocal updated_count
+        updated_count += 1
+        updated_gateways.append(gw)
+
+    server.on_gateway_connected = on_connected
+    server.on_gateway_updated = on_updated
+
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await register(ws, [TEST_INTEGRATION])
+    assert connected_count == 1
+    assert updated_count == 0
+
+    # Re-register
+    await register(ws, [TEST_INTEGRATION])
+    assert connected_count == 1  # Should NOT increment
+    assert updated_count == 1
+    assert updated_gateways[0].id is not None
+    await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_request_refresh_registrations(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await register(ws, [TEST_INTEGRATION])
+
+    gateway_id = server.connected_gateways[0].id
+
+    await server.request_refresh_registrations(gateway_id)
+
+    raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
+    msg = json.loads(raw)
+    assert msg["type"] == "refresh_registrations"
+    await ws.close()
+
+
+@pytest.mark.asyncio
 async def test_has_gateway_for_org(server: GatewayServer):
     ws = await connect_and_auth(server.url, "gw_valid")
     await register(ws)
