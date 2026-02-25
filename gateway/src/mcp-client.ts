@@ -1,6 +1,9 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { McpServerConfig } from "./config.js";
 import type { ToolDefinition, ToolResult, ContentBlock } from "@journal.one/gateway-protocol";
 import { Logger } from "./common/logger.js";
@@ -14,7 +17,7 @@ export interface McpClientEvents {
 
 export class McpClient extends EventEmitter<McpClientEvents> {
   private client: Client | null = null;
-  private transport: StdioClientTransport | null = null;
+  private transport: Transport | null = null;
   private running = false;
 
   constructor(
@@ -25,17 +28,37 @@ export class McpClient extends EventEmitter<McpClientEvents> {
     super();
   }
 
-  async start(): Promise<void> {
-    this.logger.info(`Starting MCP process for integration "${this.definition.id}"`, {
-      command: this.definition.command,
-      args: this.definition.args,
-    });
+  private createTransport(): Transport {
+    switch (this.definition.transport) {
+      case "stdio":
+        return new StdioClientTransport({
+          command: this.definition.command,
+          args: this.definition.args,
+          env: { ...process.env, ...this.env } as Record<string, string>,
+        });
 
-    this.transport = new StdioClientTransport({
-      command: this.definition.command,
-      args: this.definition.args,
-      env: { ...process.env, ...this.env } as Record<string, string>,
-    });
+      case "sse":
+        return new SSEClientTransport(new URL(this.definition.url), {
+          requestInit: { headers: this.env },
+        });
+
+      case "streamable-http":
+        return new StreamableHTTPClientTransport(
+          new URL(this.definition.url),
+          { requestInit: { headers: this.env } }
+        );
+    }
+  }
+
+  async start(): Promise<void> {
+    this.logger.info(
+      `Starting MCP ${this.definition.transport} transport for integration "${this.definition.id}"`,
+      this.definition.transport === "stdio"
+        ? { command: this.definition.command, args: this.definition.args }
+        : { url: this.definition.url }
+    );
+
+    this.transport = this.createTransport();
 
     this.client = new Client(
       { name: `journal-gateway/${this.definition.id}`, version: VERSION },
@@ -46,7 +69,7 @@ export class McpClient extends EventEmitter<McpClientEvents> {
       if (this.running) {
         this.running = false;
         const err = new Error(
-          `MCP process for integration "${this.definition.id}" exited unexpectedly`
+          `MCP ${this.definition.transport} transport for integration "${this.definition.id}" closed unexpectedly`
         );
         this.logger.error(err.message);
         this.emit("crash", err);
@@ -67,7 +90,7 @@ export class McpClient extends EventEmitter<McpClientEvents> {
     );
 
     this.logger.info(
-      `MCP process for integration "${this.definition.id}" started successfully`
+      `MCP ${this.definition.transport} transport for integration "${this.definition.id}" started successfully`
     );
   }
 
@@ -117,7 +140,7 @@ export class McpClient extends EventEmitter<McpClientEvents> {
     }
     this.client = null;
     this.logger.info(
-      `MCP process for integration "${this.definition.id}" stopped`
+      `MCP ${this.definition.transport} transport for integration "${this.definition.id}" stopped`
     );
   }
 

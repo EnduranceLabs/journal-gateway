@@ -111,9 +111,9 @@ describe("parseConfig", () => {
     ).toThrow();
   });
 
-  it("rejects server missing command", () => {
+  it("rejects stdio server missing command", () => {
     const inline = JSON.stringify({
-      mcpServers: [{ id: "test" }],
+      mcpServers: [{ id: "test", transport: "stdio" }],
     });
     expect(() =>
       parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), [])
@@ -128,8 +128,11 @@ describe("parseConfig", () => {
     const server = config.mcpServers[0];
     expect(server.name).toBe("minimal"); // defaults to id
     expect(server.description).toBe("");
-    expect(server.args).toEqual([]);
-    expect(server.envVars).toEqual({});
+    expect(server.transport).toBe("stdio");
+    if (server.transport === "stdio") {
+      expect(server.args).toEqual([]);
+      expect(server.envVars).toEqual({});
+    }
   });
 
   it("accepts empty {} as valid config", () => {
@@ -207,6 +210,155 @@ describe("parseConfig", () => {
     parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), []);
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  // --- Backward compatibility ---
+
+  it("injects transport: stdio when command present but no transport field", () => {
+    const inline = JSON.stringify({
+      mcpServers: [{ id: "legacy", command: "npx", args: ["server"] }],
+    });
+    const config = parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), []);
+    expect(config.mcpServers[0].transport).toBe("stdio");
+  });
+
+  it("does not overwrite explicit transport field", () => {
+    const inline = JSON.stringify({
+      mcpServers: [
+        { id: "remote", transport: "sse", url: "https://mcp.example.com/sse" },
+      ],
+    });
+    const config = parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), []);
+    expect(config.mcpServers[0].transport).toBe("sse");
+  });
+
+  // --- SSE transport ---
+
+  it("parses SSE config with url", () => {
+    const inline = JSON.stringify({
+      mcpServers: [
+        { id: "remote", transport: "sse", url: "https://mcp.example.com/sse" },
+      ],
+    });
+    const config = parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), []);
+    const server = config.mcpServers[0];
+    expect(server.transport).toBe("sse");
+    if (server.transport === "sse") {
+      expect(server.url).toBe("https://mcp.example.com/sse");
+    }
+  });
+
+  it("rejects SSE config missing url", () => {
+    const inline = JSON.stringify({
+      mcpServers: [{ id: "bad", transport: "sse" }],
+    });
+    expect(() =>
+      parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), [])
+    ).toThrow();
+  });
+
+  it("resolves SSE headers from env vars", () => {
+    const inline = JSON.stringify({
+      mcpServers: [
+        {
+          id: "remote",
+          transport: "sse",
+          url: "https://mcp.example.com/sse",
+          headers: { Authorization: "API_KEY" },
+        },
+      ],
+    });
+    const config = parseConfig(
+      baseEnv({
+        JOURNAL_GATEWAY_CONFIG: inline,
+        API_KEY: "Bearer sk-123",
+      }),
+      []
+    );
+    const env = config.mcpEnvVars.get("remote");
+    expect(env).toEqual({ Authorization: "Bearer sk-123" });
+  });
+
+  it("throws when SSE header env var is missing", () => {
+    const inline = JSON.stringify({
+      mcpServers: [
+        {
+          id: "remote",
+          transport: "sse",
+          url: "https://mcp.example.com/sse",
+          headers: { Authorization: "MISSING_KEY" },
+        },
+      ],
+    });
+    expect(() =>
+      parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), [])
+    ).toThrow(
+      'MCP server "remote" requires environment variable MISSING_KEY for header "Authorization"'
+    );
+  });
+
+  // --- Streamable HTTP transport ---
+
+  it("parses streamable-http config with url", () => {
+    const inline = JSON.stringify({
+      mcpServers: [
+        { id: "api", transport: "streamable-http", url: "https://mcp.example.com/mcp" },
+      ],
+    });
+    const config = parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), []);
+    const server = config.mcpServers[0];
+    expect(server.transport).toBe("streamable-http");
+    if (server.transport === "streamable-http") {
+      expect(server.url).toBe("https://mcp.example.com/mcp");
+    }
+  });
+
+  it("rejects streamable-http config missing url", () => {
+    const inline = JSON.stringify({
+      mcpServers: [{ id: "bad", transport: "streamable-http" }],
+    });
+    expect(() =>
+      parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), [])
+    ).toThrow();
+  });
+
+  it("resolves streamable-http headers from env vars", () => {
+    const inline = JSON.stringify({
+      mcpServers: [
+        {
+          id: "api",
+          transport: "streamable-http",
+          url: "https://mcp.example.com/mcp",
+          headers: { "X-Api-Key": "SECRET_KEY" },
+        },
+      ],
+    });
+    const config = parseConfig(
+      baseEnv({
+        JOURNAL_GATEWAY_CONFIG: inline,
+        SECRET_KEY: "my-secret",
+      }),
+      []
+    );
+    const env = config.mcpEnvVars.get("api");
+    expect(env).toEqual({ "X-Api-Key": "my-secret" });
+  });
+
+  // --- Mixed transports ---
+
+  it("supports mixed transports in the same config", () => {
+    const inline = JSON.stringify({
+      mcpServers: [
+        { id: "local", command: "npx", args: ["-y", "pg-server"] },
+        { id: "remote-sse", transport: "sse", url: "https://mcp.example.com/sse" },
+        { id: "remote-http", transport: "streamable-http", url: "https://mcp.example.com/mcp" },
+      ],
+    });
+    const config = parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), []);
+    expect(config.mcpServers).toHaveLength(3);
+    expect(config.mcpServers[0].transport).toBe("stdio");
+    expect(config.mcpServers[1].transport).toBe("sse");
+    expect(config.mcpServers[2].transport).toBe("streamable-http");
   });
 });
 

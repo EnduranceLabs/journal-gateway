@@ -2,15 +2,57 @@ import { z } from "zod";
 import { readFileSync } from "node:fs";
 import type { GatewayConfig } from "@journal.one/gateway-protocol";
 
-export interface McpServerConfig {
-  id: string;
+// --- Discriminated union for MCP server configs ---
+
+const McpServerBaseSchema = z.object({
+  id: z.string().min(1, "Each MCP server must have an id"),
+  name: z.string().optional(),
+  description: z.string().default(""),
+});
+
+const StdioServerSchema = McpServerBaseSchema.extend({
+  transport: z.literal("stdio"),
+  command: z.string().min(1, "stdio transport requires a command"),
+  args: z.array(z.string()).default([]),
+  envVars: z.record(z.string()).default({}),
+});
+
+const SseServerSchema = McpServerBaseSchema.extend({
+  transport: z.literal("sse"),
+  url: z.string().url("sse transport requires a valid url"),
+  headers: z.record(z.string()).default({}),
+});
+
+const StreamableHttpServerSchema = McpServerBaseSchema.extend({
+  transport: z.literal("streamable-http"),
+  url: z.string().url("streamable-http transport requires a valid url"),
+  headers: z.record(z.string()).default({}),
+});
+
+const McpServerConfigSchema = z.discriminatedUnion("transport", [
+  StdioServerSchema,
+  SseServerSchema,
+  StreamableHttpServerSchema,
+]);
+
+// --- Exported types ---
+
+export type StdioServerConfig = z.infer<typeof StdioServerSchema> & {
   type: "mcp_server";
   name: string;
-  description: string;
-  command: string;
-  args: string[];
-  envVars: Record<string, string>;
-}
+};
+export type SseServerConfig = z.infer<typeof SseServerSchema> & {
+  type: "mcp_server";
+  name: string;
+};
+export type StreamableHttpServerConfig = z.infer<
+  typeof StreamableHttpServerSchema
+> & { type: "mcp_server"; name: string };
+
+export type McpServerConfig =
+  | StdioServerConfig
+  | SseServerConfig
+  | StreamableHttpServerConfig;
 
 export type RuntimeConfig = GatewayConfig & {
   mcpServers: McpServerConfig[];
@@ -24,17 +66,32 @@ const OperationalSchema = z.object({
   logLevel: z.enum(["debug", "info", "warn", "error"]),
 });
 
-const McpServerConfigSchema = z.object({
-  id: z.string().min(1, "Each MCP server must have an id"),
-  command: z.string().min(1, "Each MCP server must have a command"),
-  args: z.array(z.string()).default([]),
-  name: z.string().optional(),
-  description: z.string().default(""),
-  envVars: z.record(z.string()).default({}),
-});
+/**
+ * Backward compat: inject `transport: "stdio"` into objects that have
+ * `command` but no `transport` field.
+ */
+function preprocessMcpServers(
+  servers: unknown[]
+): unknown[] {
+  return servers.map((s) => {
+    if (
+      typeof s === "object" &&
+      s !== null &&
+      "command" in s &&
+      !("transport" in s)
+    ) {
+      return { ...s, transport: "stdio" };
+    }
+    return s;
+  });
+}
 
 export const GatewayConfigFileSchema = z.object({
-  mcpServers: z.array(McpServerConfigSchema).default([]),
+  mcpServers: z
+    .array(z.unknown())
+    .default([])
+    .transform((servers) => preprocessMcpServers(servers))
+    .pipe(z.array(McpServerConfigSchema)),
   skillsDir: z.string().nullable().default(null),
 });
 
@@ -107,30 +164,41 @@ export function parseConfig(
     );
   }
 
-  // Build McpServerConfig[] and resolve envVars
+  // Build McpServerConfig[] and resolve envVars / headers
   const mcpServers: McpServerConfig[] = [];
   const mcpEnvVars = new Map<string, Record<string, string>>();
 
   for (const server of configFile.mcpServers) {
     const config: McpServerConfig = {
-      id: server.id,
+      ...server,
       type: "mcp_server",
       name: server.name ?? server.id,
-      description: server.description,
-      command: server.command,
-      args: server.args,
-      envVars: server.envVars,
-    };
+    } as McpServerConfig;
 
     const resolvedEnv: Record<string, string> = {};
-    for (const [hostVar, serverVar] of Object.entries(config.envVars)) {
-      const value = env[hostVar];
-      if (!value) {
-        throw new Error(
-          `MCP server "${config.id}" requires environment variable ${hostVar}`
-        );
+
+    if (config.transport === "stdio") {
+      // Resolve envVars mapping: { hostVar: serverVar }
+      for (const [hostVar, serverVar] of Object.entries(config.envVars)) {
+        const value = env[hostVar];
+        if (!value) {
+          throw new Error(
+            `MCP server "${config.id}" requires environment variable ${hostVar}`
+          );
+        }
+        resolvedEnv[serverVar as string] = value;
       }
-      resolvedEnv[serverVar as string] = value;
+    } else {
+      // SSE / streamable-http: resolve headers mapping { headerName: envVarName }
+      for (const [headerName, envVarName] of Object.entries(config.headers)) {
+        const value = env[envVarName];
+        if (!value) {
+          throw new Error(
+            `MCP server "${config.id}" requires environment variable ${envVarName} for header "${headerName}"`
+          );
+        }
+        resolvedEnv[headerName] = value;
+      }
     }
 
     mcpServers.push(config);
