@@ -40,7 +40,7 @@ gateway/                    # Gateway process (connects outbound to service)
     common/                 # Shared utilities (logger)
     connection.ts           # WebSocket connection handling
     runtime.ts              # MCP + skills runtime (IntegrationProvider)
-    mcp-client.ts           # MCP server subprocess wrapper
+    mcp-client.ts           # MCP server transport wrapper (stdio, SSE, streamable-http)
     skill-client.ts         # Skill file loader + fs.watch change detection
     version-hash.ts         # Content-hash versioning for change detection
     config.ts               # Configuration parsing
@@ -54,7 +54,7 @@ spec/
   protocol.md               # WebSocket protocol specification
 ```
 
-The gateway connects outbound to the Journal service over WebSocket. It manages MCP server subprocesses and skill files, routing tool calls from the service to the appropriate MCP server.
+The gateway connects outbound to the Journal service over WebSocket. It manages MCP server connections (stdio subprocesses, SSE, or streamable-http) and skill files, routing tool calls from the service to the appropriate MCP server.
 
 ## Client Libraries
 

@@ -49,6 +49,14 @@ docker run -e JOURNAL_GATEWAY_TOKEN=gw_your_token \
       "name": "PostgreSQL",
       "description": "Query databases",
       "envVars": { "DATABASE_URL": "DATABASE_URL" }
+    },
+    {
+      "id": "remote-api",
+      "transport": "streamable-http",
+      "url": "https://mcp.example.com/mcp",
+      "name": "Remote API",
+      "description": "Remote MCP server",
+      "headers": { "Authorization": "API_KEY" }
     }
   ],
   "skillsDir": "/opt/journal/skills"
@@ -84,18 +92,40 @@ Both `mcpServers` and `skillsDir` are optional. An empty `{}` is valid — the g
 
 #### MCP servers
 
-[MCP (Model Context Protocol)](https://modelcontextprotocol.io/) is a standard for connecting AI agents to external tools. The gateway runs MCP servers as subprocesses, making their tools available to Journal.
+[MCP (Model Context Protocol)](https://modelcontextprotocol.io/) is a standard for connecting AI agents to external tools. The gateway connects to MCP servers via three transports, making their tools available to Journal.
 
-Each entry in `mcpServers`:
+Each entry in `mcpServers` has a `transport` field that determines the connection type. Configs without a `transport` field that have a `command` are treated as `stdio` for backward compatibility.
+
+**Common fields (all transports):**
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `id` | yes | Unique name for this server |
-| `command` | yes | Command to run (e.g. `npx`, `python`) |
-| `args` | no | Command-line arguments |
+| `transport` | no | `"stdio"` (default), `"sse"`, or `"streamable-http"` |
 | `name` | no | Display name (defaults to `id`) |
 | `description` | no | What this server does |
-| `envVars` | no | Map of env var names to resolve from the host environment and pass to the server |
+
+**`stdio` — local subprocess (default):**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `command` | yes | Command to run (e.g. `npx`, `python`) |
+| `args` | no | Command-line arguments |
+| `envVars` | no | Map of env var names to resolve from the host environment and pass to the subprocess |
+
+**`sse` — SSE client (legacy remote servers):**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `url` | yes | SSE endpoint URL |
+| `headers` | no | Map of `{ headerName: envVarName }` — values resolved from host environment |
+
+**`streamable-http` — Streamable HTTP client (recommended for remote servers):**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `url` | yes | HTTP endpoint URL |
+| `headers` | no | Map of `{ headerName: envVarName }` — values resolved from host environment |
 
 #### Skills
 
