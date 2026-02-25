@@ -56,3 +56,9 @@ git commit -m "Bump version to 0.2.0"
 
 The script builds all packages, then publishes protocol first (since the other
 two depend on it), followed by gateway and client.
+
+### 5. Update Homebrew formula
+
+```bash
+./packaging/homebrew/publish.sh
+```

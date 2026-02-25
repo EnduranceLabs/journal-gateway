@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Runtime } from "../runtime.js";
 import { IntegrationNotFoundError } from "@journal.one/gateway-protocol";
-import type { RuntimeConfig, McpServerConfig } from "../config.js";
+import type { RuntimeConfig, McpServerConfig, GatewayConfigFile } from "../config.js";
 import { EventEmitter } from "node:events";
 
 // Track listeners so we can trigger events in tests
@@ -61,9 +61,53 @@ vi.mock("../skill-client.js", () => {
   };
 });
 
+// Mock ConfigWatcher
+const configWatcherEmitter = new EventEmitter();
+const mockConfigWatcher = {
+  startWatching: vi.fn(),
+  stopWatching: vi.fn(),
+  on: configWatcherEmitter.on.bind(configWatcherEmitter),
+  off: configWatcherEmitter.off.bind(configWatcherEmitter),
+  emit: configWatcherEmitter.emit.bind(configWatcherEmitter),
+};
+
+vi.mock("../config-watcher.js", () => {
+  return {
+    ConfigWatcher: vi.fn().mockImplementation(() => mockConfigWatcher),
+  };
+});
+
+// Mock EnvFile
+const envFileEmitter = new EventEmitter();
+const mockEnvFile = {
+  load: vi.fn().mockReturnValue({}),
+  startWatching: vi.fn(),
+  stopWatching: vi.fn(),
+  on: envFileEmitter.on.bind(envFileEmitter),
+  off: envFileEmitter.off.bind(envFileEmitter),
+  emit: envFileEmitter.emit.bind(envFileEmitter),
+};
+
+vi.mock("../env-file.js", () => {
+  return {
+    EnvFile: vi.fn().mockImplementation(() => mockEnvFile),
+  };
+});
+
+// Mock resolveConfigFile — import after mocking
+vi.mock("../config.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../config.js")>();
+  return {
+    ...original,
+    resolveConfigFile: vi.fn(original.resolveConfigFile),
+  };
+});
+
+import { resolveConfigFile } from "../config.js";
+const mockResolveConfigFile = vi.mocked(resolveConfigFile);
+
 const testIntegration: McpServerConfig = {
   id: "test-db",
-  type: "mcp_server",
   transport: "stdio",
   name: "Test DB",
   description: "A test database integration",
@@ -90,8 +134,11 @@ describe("Runtime", () => {
     vi.clearAllMocks();
     mcpClientInstances.length = 0;
     skillClientEmitter.removeAllListeners();
+    configWatcherEmitter.removeAllListeners();
+    envFileEmitter.removeAllListeners();
     mockSkillClient.getSkills.mockReturnValue([]);
     mockSkillClient.getIntegrations.mockReturnValue([]);
+    mockEnvFile.load.mockReturnValue({});
   });
 
   it("starts all configured integrations", async () => {
@@ -216,6 +263,32 @@ describe("Runtime", () => {
     expect(emitted).toBe(false);
   });
 
+  it("routes tool calls to correct integration across multiple integrations", async () => {
+    const secondIntegration: McpServerConfig = {
+      id: "second-db",
+      transport: "stdio",
+      name: "Second DB",
+      description: "Another database",
+      command: "npx",
+      args: ["-y", "@test/mcp-db2"],
+      envVars: {},
+    };
+
+    const config = makeConfig([testIntegration, secondIntegration]);
+    const runtime = new Runtime(config);
+    await runtime.start();
+
+    const tools = await runtime.getTools();
+    expect(tools).toHaveLength(2);
+    expect(tools.map((t) => t.id)).toEqual(["test-db", "second-db"]);
+
+    // Both integrations should be callable
+    const result = await runtime.callTool("second-db", "query", { sql: "SELECT 2" });
+    expect(result.content[0]).toEqual({ type: "text", text: "result" });
+
+    await runtime.stop();
+  });
+
   it("debounces rapid change events", async () => {
     const runtime = new Runtime(makeConfig());
     await runtime.start();
@@ -242,5 +315,304 @@ describe("Runtime", () => {
     // Wait for debounce
     await new Promise((r) => setTimeout(r, 800));
     expect(emitCount).toBe(1);
+  });
+});
+
+describe("Runtime hot-reload", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mcpClientInstances.length = 0;
+    skillClientEmitter.removeAllListeners();
+    configWatcherEmitter.removeAllListeners();
+    envFileEmitter.removeAllListeners();
+    mockSkillClient.getSkills.mockReturnValue([]);
+    mockSkillClient.getIntegrations.mockReturnValue([]);
+    mockEnvFile.load.mockReturnValue({});
+  });
+
+  it("config change adds new server", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+
+    expect(mcpClientInstances).toHaveLength(1);
+
+    // Emit config_changed with an additional server
+    const newConfigFile: GatewayConfigFile = {
+      mcpServers: [
+        { transport: "stdio", id: "test-db", name: "Test DB", description: "A test database integration", command: "npx", args: ["-y", "@test/mcp-db"], envVars: { DATABASE_URL: "DATABASE_URL" } },
+        { transport: "stdio", id: "new-server", name: "New Server", description: "", command: "node", args: [], envVars: {} },
+      ],
+      skillsDir: null,
+    };
+
+    mockResolveConfigFile.mockReturnValue({
+      mcpServers: [
+        { ...testIntegration },
+        { id: "new-server", transport: "stdio" as const, name: "New Server", description: "", command: "node", args: [], envVars: {} },
+      ],
+      mcpEnvVars: new Map([
+        ["test-db", { DATABASE_URL: "postgresql://localhost/test" }],
+        ["new-server", {}],
+      ]),
+    });
+
+    configWatcherEmitter.emit("config_changed", newConfigFile);
+
+    // Wait for config reload debounce (500ms) + change check debounce (500ms)
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // New server should have been started
+    expect(mcpClientInstances).toHaveLength(2);
+    expect(mcpClientInstances[1].id).toBe("new-server");
+
+    const tools = await runtime.getTools();
+    expect(tools).toHaveLength(2);
+    expect(tools.map((t) => t.id)).toEqual(["test-db", "new-server"]);
+
+    await runtime.stop();
+  });
+
+  it("config change removes server", async () => {
+    const secondIntegration: McpServerConfig = {
+      id: "second-db",
+      transport: "stdio",
+      name: "Second DB",
+      description: "Another database",
+      command: "npx",
+      args: ["-y", "@test/mcp-db2"],
+      envVars: {},
+    };
+
+    const config = makeConfig([testIntegration, secondIntegration]);
+    const runtime = new Runtime(config);
+    await runtime.start();
+
+    expect(mcpClientInstances).toHaveLength(2);
+
+    // Emit config_changed with only the first server
+    const newConfigFile: GatewayConfigFile = {
+      mcpServers: [
+        { transport: "stdio", id: "test-db", name: "Test DB", description: "A test database integration", command: "npx", args: ["-y", "@test/mcp-db"], envVars: { DATABASE_URL: "DATABASE_URL" } },
+      ],
+      skillsDir: null,
+    };
+
+    mockResolveConfigFile.mockReturnValue({
+      mcpServers: [{ ...testIntegration }],
+      mcpEnvVars: new Map([["test-db", { DATABASE_URL: "postgresql://localhost/test" }]]),
+    });
+
+    configWatcherEmitter.emit("config_changed", newConfigFile);
+
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // The removed server's stop should have been called
+    const removedInstance = mcpClientInstances.find((i) => i.id === "second-db");
+    expect(removedInstance).toBeDefined();
+
+    const tools = await runtime.getTools();
+    expect(tools).toHaveLength(1);
+    expect(tools[0].id).toBe("test-db");
+
+    await runtime.stop();
+  });
+
+  it("config change modifies server restarts it", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+
+    const originalInstance = mcpClientInstances[0];
+
+    // Emit config_changed with a modified command
+    const modifiedServer: McpServerConfig = {
+      ...testIntegration,
+      command: "new-command",
+    };
+
+    const newConfigFile: GatewayConfigFile = {
+      mcpServers: [
+        { transport: "stdio", id: "test-db", name: "Test DB", description: "A test database integration", command: "new-command", args: ["-y", "@test/mcp-db"], envVars: { DATABASE_URL: "DATABASE_URL" } },
+      ],
+      skillsDir: null,
+    };
+
+    mockResolveConfigFile.mockReturnValue({
+      mcpServers: [modifiedServer],
+      mcpEnvVars: new Map([["test-db", { DATABASE_URL: "postgresql://localhost/test" }]]),
+    });
+
+    configWatcherEmitter.emit("config_changed", newConfigFile);
+
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // Old client should have been stopped and a new one started
+    expect(mcpClientInstances).toHaveLength(2); // original + new
+    expect(mcpClientInstances[1].id).toBe("test-db");
+
+    await runtime.stop();
+  });
+
+  it("env change restarts affected servers", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+
+    // Env file now returns a different value
+    mockEnvFile.load.mockReturnValue({ DATABASE_URL: "postgresql://new-host/test" });
+
+    mockResolveConfigFile.mockReturnValue({
+      mcpServers: [{ ...testIntegration }],
+      mcpEnvVars: new Map([["test-db", { DATABASE_URL: "postgresql://new-host/test" }]]),
+    });
+
+    envFileEmitter.emit("env_changed");
+
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // Server should be restarted due to env change
+    expect(mcpClientInstances).toHaveLength(2); // original + restarted
+    expect(mcpClientInstances[1].id).toBe("test-db");
+
+    await runtime.stop();
+  });
+
+  it("env change with no affected servers does not restart", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+
+    // Env file changes but resolved env is the same
+    mockEnvFile.load.mockReturnValue({ UNRELATED_VAR: "value" });
+
+    mockResolveConfigFile.mockReturnValue({
+      mcpServers: [{ ...testIntegration }],
+      mcpEnvVars: new Map([["test-db", { DATABASE_URL: "postgresql://localhost/test" }]]),
+    });
+
+    envFileEmitter.emit("env_changed");
+
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // No restart — still only 1 instance
+    expect(mcpClientInstances).toHaveLength(1);
+
+    await runtime.stop();
+  });
+
+  it("config resolve error keeps current state", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+
+    // resolveConfigFile throws
+    mockResolveConfigFile.mockImplementation(() => {
+      throw new Error("Missing env var");
+    });
+
+    const newConfigFile: GatewayConfigFile = {
+      mcpServers: [
+        { transport: "stdio", id: "bad-server", name: "Bad", description: "", command: "echo", args: [], envVars: { MISSING: "MISSING" } },
+      ],
+      skillsDir: null,
+    };
+
+    configWatcherEmitter.emit("config_changed", newConfigFile);
+
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // No change — still 1 instance
+    expect(mcpClientInstances).toHaveLength(1);
+    const tools = await runtime.getTools();
+    expect(tools).toHaveLength(1);
+    expect(tools[0].id).toBe("test-db");
+
+    await runtime.stop();
+  });
+
+  it("emits versions_changed after add/remove", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+
+    const changedPromise = new Promise<void>((resolve) => {
+      runtime.on("versions_changed", resolve);
+    });
+
+    // Add a new server
+    const newConfigFile: GatewayConfigFile = {
+      mcpServers: [
+        { transport: "stdio", id: "test-db", name: "Test DB", description: "A test database integration", command: "npx", args: ["-y", "@test/mcp-db"], envVars: { DATABASE_URL: "DATABASE_URL" } },
+        { transport: "stdio", id: "added", name: "Added", description: "", command: "node", args: [], envVars: {} },
+      ],
+      skillsDir: null,
+    };
+
+    mockResolveConfigFile.mockReturnValue({
+      mcpServers: [
+        { ...testIntegration },
+        { id: "added", transport: "stdio" as const, name: "Added", description: "", command: "node", args: [], envVars: {} },
+      ],
+      mcpEnvVars: new Map([
+        ["test-db", { DATABASE_URL: "postgresql://localhost/test" }],
+        ["added", {}],
+      ]),
+    });
+
+    configWatcherEmitter.emit("config_changed", newConfigFile);
+
+    await changedPromise;
+
+    await runtime.stop();
+  });
+
+  it("stop cleans up watchers", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+    await runtime.stop();
+
+    expect(mockConfigWatcher.stopWatching).toHaveBeenCalled();
+    expect(mockEnvFile.stopWatching).toHaveBeenCalled();
+  });
+
+  it("env_changed after config_changed within debounce preserves config change", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+
+    expect(mcpClientInstances).toHaveLength(1);
+
+    // Config change adds a new server
+    const newConfigFile: GatewayConfigFile = {
+      mcpServers: [
+        { transport: "stdio", id: "test-db", name: "Test DB", description: "A test database integration", command: "npx", args: ["-y", "@test/mcp-db"], envVars: { DATABASE_URL: "DATABASE_URL" } },
+        { transport: "stdio", id: "new-server", name: "New Server", description: "", command: "node", args: [], envVars: {} },
+      ],
+      skillsDir: null,
+    };
+
+    mockResolveConfigFile.mockReturnValue({
+      mcpServers: [
+        { ...testIntegration },
+        { id: "new-server", transport: "stdio" as const, name: "New Server", description: "", command: "node", args: [], envVars: {} },
+      ],
+      mcpEnvVars: new Map([
+        ["test-db", { DATABASE_URL: "postgresql://localhost/test" }],
+        ["new-server", {}],
+      ]),
+    });
+
+    // Fire config_changed, then env_changed within the debounce window
+    configWatcherEmitter.emit("config_changed", newConfigFile);
+    envFileEmitter.emit("env_changed");
+
+    // Wait for debounce + processing
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // The config change should NOT be lost — new server should appear
+    expect(mcpClientInstances).toHaveLength(2);
+    expect(mcpClientInstances[1].id).toBe("new-server");
+
+    // resolveConfigFile should have been called with the new config file, not the old one
+    expect(mockResolveConfigFile).toHaveBeenLastCalledWith(
+      newConfigFile,
+      expect.anything()
+    );
+
+    await runtime.stop();
   });
 });

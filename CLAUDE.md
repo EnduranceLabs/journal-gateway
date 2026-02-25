@@ -16,7 +16,9 @@ libraries for the service side. Keep it simple.
 - `gateway/src/runtime.ts` — Runtime that manages MCP clients and skills. Implements
   IntegrationProvider with `getTools()` and `getSkills()`. Tracks content-hash
   versions (mcpVersion/skillsVersion) and emits `versions_changed` when tools or
-  skills change at runtime.
+  skills change at runtime. Supports hot-reload: accepts optional `configFilePath`
+  and `envFilePath`, creates ConfigWatcher and EnvFile instances, and dynamically
+  adds/removes/restarts MCP clients when config or env files change on disk.
 - `gateway/src/mcp-client.ts` — Manages individual MCP server connections across three
   transports: `stdio` (subprocess), `sse` (SSEClientTransport), and `streamable-http`
   (StreamableHTTPClientTransport). Uses a `createTransport()` factory that switches on
@@ -33,8 +35,18 @@ libraries for the service side. Keep it simple.
   (`--config` or `JOURNAL_GATEWAY_CONFIG`). Validates with Zod using a discriminated union
   on `transport` (`stdio`, `sse`, `streamable-http`). Resolves `envVars` for stdio and
   `headers` (env var → header value) for HTTP transports. Backward compat: configs with
-  `command` but no `transport` field auto-get `transport: "stdio"`.
-- `gateway/src/main.ts` — CLI entry point.
+  `command` but no `transport` field auto-get `transport: "stdio"`. Exports reusable
+  functions: `readConfigFile()`, `resolveConfigFile()`, `resolveConfigFilePath()`.
+- `gateway/src/config-watcher.ts` — Watches the gateway config file with `fs.watch` +
+  500ms debounce. Re-reads and re-parses on change via `readConfigFile()`. Parse errors
+  are silently ignored (current config kept). Emits `config_changed` with the new
+  `GatewayConfigFile`.
+- `gateway/src/env-file.ts` — Loads and watches a `.env` file. Uses `dotenv.parse()` for
+  parsing without mutating `process.env`. `fs.watch` + 500ms debounce pattern. Emits
+  `env_changed` on file modification.
+- `gateway/src/main.ts` — CLI entry point. Auto-detects `.env` in cwd (with `--env-file`
+  override or `JOURNAL_GATEWAY_ENV_FILE` env var), loads it before `parseConfig()`, and
+  passes config file path + env file path to `Runtime` for hot-reload.
 
 ## Gateway Config File
 All MCP servers and skills are configured via a single JSON config file with two top-level
@@ -75,7 +87,10 @@ The Runtime implements this interface to provide capabilities to the connection:
 The gateway detects tool/skill changes at runtime and notifies the service:
 - MCP: listens for `notifications/tools/list_changed` from MCP SDK + crash events
 - Skills: `fs.watch` on the skills directory (`.md` files only)
-- Both paths debounce 500ms, recompute content-hash versions, and emit
+- Config hot-reload: `ConfigWatcher` watches the config file, `EnvFile` watches `.env`;
+  on change the Runtime diffs current vs new servers by ID and adds/removes/restarts
+  MCP clients as needed. `skillsDir` changes are NOT hot-reloaded (logged warning).
+- All paths debounce 500ms, recompute content-hash versions, and emit
   `versions_changed` only if a version actually changed
 - The connection subscribes to this event and sends a lightweight `version_changed`
   message (fire-and-forget push with just version hashes, not full integrations)

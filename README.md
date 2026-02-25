@@ -72,6 +72,7 @@ docker run -e JOURNAL_GATEWAY_TOKEN=gw_your_token \
 | `JOURNAL_GATEWAY_TOKEN` | yes | — | Auth token from Journal (starts with `gw_`) |
 | `JOURNAL_GATEWAY_URL` | no | `wss://gateway.journal.one/v1` | Journal endpoint |
 | `JOURNAL_GATEWAY_CONFIG` | no | — | Path to config file, or inline JSON (detected by leading `{`) |
+| `JOURNAL_GATEWAY_ENV_FILE` | no | — | Path to `.env` file (auto-detects `.env` in cwd if not set) |
 | `LOG_LEVEL` | no | `info` | Log level: `debug`, `info`, `warn`, `error` |
 
 ### Config file
@@ -82,6 +83,8 @@ The config file describes what the gateway offers. Point to it with either:
 2. **`JOURNAL_GATEWAY_CONFIG`** — env var containing a file path or inline JSON
 
 Both `mcpServers` and `skillsDir` are optional. An empty `{}` is valid — the gateway will connect but won't have anything to offer.
+
+You can also use `--env-file /path/to/.env` to load environment variables from a `.env` file. If neither `--env-file` nor `JOURNAL_GATEWAY_ENV_FILE` is set, the gateway auto-detects a `.env` file in the current directory. Values from `.env` fill in gaps — real environment variables always take precedence.
 
 #### Config file schema
 
@@ -142,6 +145,8 @@ The gateway connects **outbound** to the Journal service — no inbound ports ar
 ### Change detection
 
 Tools and skills can change while the gateway is running. An MCP server might restart with different tools, or a skill file might be added to disk. The gateway detects these changes automatically and sends a lightweight **`version_changed`** message with updated version hashes. The service can then pull the specific data it needs.
+
+The gateway also watches the config file and `.env` file for changes. When you add, remove, or modify an MCP server in the config file, the gateway automatically starts, stops, or restarts the affected servers — no gateway restart required. Similarly, when an environment variable in the `.env` file changes, any MCP servers that depend on it are automatically restarted. Note that `skillsDir` changes are not hot-reloaded and require a gateway restart.
 
 Version hashes (`mcpVersion` and `skillsVersion`) are content-based (SHA-256, 16 hex chars). Same content produces the same hash across restarts — the service can tell at a glance whether anything actually changed.
 
