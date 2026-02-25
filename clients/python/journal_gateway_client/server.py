@@ -309,7 +309,7 @@ class GatewayServer:
                 await ws.close()
                 return
 
-            protocol_version = msg.get("protocolVersion", 1)
+            protocol_version = msg.get("protocolVersion", 0)
             gateway_version = msg.get("gatewayVersion", "unknown")
 
             result = await self._validate_token(msg["token"])

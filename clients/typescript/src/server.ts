@@ -71,16 +71,8 @@ export class GatewayServer {
     return Array.from(this.gateways.values()).map((g) => g.gateway);
   }
 
-  get availableTools(): Array<{
-    integrationId: string;
-    name: string;
-    description: string;
-  }> {
-    const tools: Array<{
-      integrationId: string;
-      name: string;
-      description: string;
-    }> = [];
+  get availableTools(): Array<{ integrationId: string; name: string; description: string }> {
+    const tools: Array<{ integrationId: string; name: string; description: string }> = [];
     for (const { gateway } of this.gateways.values()) {
       for (const integration of gateway.integrations) {
         for (const tool of integration.tools) {
@@ -402,7 +394,7 @@ export class GatewayServer {
     const connId = `gw_${++this.connCounter}`;
     let authenticated = false;
     let organizationId = "";
-    let protocolVersion = 1;
+    let protocolVersion = 0;
     let gatewayVersion = "unknown";
 
     const authTimer = setTimeout(() => {

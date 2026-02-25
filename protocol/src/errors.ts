@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const GATEWAY_ERROR_CODES = [
   "INTEGRATION_NOT_FOUND",
-  "TOOL_NOT_FOUND",
   "EXECUTION_FAILED",
   "TIMEOUT",
 ] as const;

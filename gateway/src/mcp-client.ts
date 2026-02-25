@@ -4,6 +4,7 @@ import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/typ
 import type { McpServerConfig } from "./config.js";
 import type { ToolDefinition, ToolResult, ContentBlock } from "@journal/gateway-protocol";
 import { Logger } from "./common/logger.js";
+import { VERSION } from "./version.js";
 import { EventEmitter } from "node:events";
 
 export interface McpClientEvents {
@@ -37,7 +38,7 @@ export class McpClient extends EventEmitter<McpClientEvents> {
     });
 
     this.client = new Client(
-      { name: `journal-gateway/${this.definition.id}`, version: "0.1.0" },
+      { name: `journal-gateway/${this.definition.id}`, version: VERSION },
       { capabilities: {} }
     );
 
