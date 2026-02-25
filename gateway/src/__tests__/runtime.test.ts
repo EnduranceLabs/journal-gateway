@@ -2,36 +2,58 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Runtime } from "../runtime.js";
 import { IntegrationNotFoundError } from "@journal/gateway-protocol";
 import type { RuntimeConfig, McpServerConfig } from "../config.js";
+import { EventEmitter } from "node:events";
+
+// Track listeners so we can trigger events in tests
+const mcpClientInstances: Array<{
+  id: string;
+  emitter: EventEmitter;
+  listTools: ReturnType<typeof vi.fn>;
+}> = [];
 
 // Mock McpClient
 vi.mock("../mcp-client.js", () => {
   return {
-    McpClient: vi.fn().mockImplementation((definition) => ({
-      start: vi.fn().mockResolvedValue(undefined),
-      stop: vi.fn().mockResolvedValue(undefined),
-      listTools: vi.fn().mockResolvedValue([
+    McpClient: vi.fn().mockImplementation((definition) => {
+      const emitter = new EventEmitter();
+      const listTools = vi.fn().mockResolvedValue([
         {
           name: "query",
           description: "Run SQL",
           inputSchema: { type: "object" },
         },
-      ]),
-      callTool: vi.fn().mockResolvedValue({
-        content: [{ type: "text", text: "result" }],
-      }),
-      isRunning: vi.fn().mockReturnValue(true),
-      integrationId: definition.id,
-      on: vi.fn(),
-    })),
+      ]);
+      const instance = {
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined),
+        listTools,
+        callTool: vi.fn().mockResolvedValue({
+          content: [{ type: "text", text: "result" }],
+        }),
+        isRunning: vi.fn().mockReturnValue(true),
+        integrationId: definition.id,
+        on: emitter.on.bind(emitter),
+        off: emitter.off.bind(emitter),
+        emit: emitter.emit.bind(emitter),
+      };
+      mcpClientInstances.push({ id: definition.id, emitter, listTools });
+      return instance;
+    }),
   };
 });
 
 // Mock SkillClient
+const skillClientEmitter = new EventEmitter();
 vi.mock("../skill-client.js", () => {
   return {
     SkillClient: vi.fn().mockImplementation(() => ({
       load: vi.fn().mockResolvedValue(undefined),
       getIntegrations: vi.fn().mockReturnValue([]),
+      startWatching: vi.fn(),
+      stopWatching: vi.fn(),
+      on: skillClientEmitter.on.bind(skillClientEmitter),
+      off: skillClientEmitter.off.bind(skillClientEmitter),
+      emit: skillClientEmitter.emit.bind(skillClientEmitter),
     })),
   };
 });
@@ -62,6 +84,8 @@ function makeConfig(integrations: McpServerConfig[] = [testIntegration]): Runtim
 describe("Runtime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mcpClientInstances.length = 0;
+    skillClientEmitter.removeAllListeners();
   });
 
   it("starts all configured integrations", async () => {
@@ -108,5 +132,89 @@ describe("Runtime", () => {
     await runtime.start();
     const registrations = await runtime.getRegistrations();
     expect(registrations).toHaveLength(0);
+  });
+
+  it("getVersions returns null versions before start", () => {
+    const runtime = new Runtime(makeConfig());
+    const versions = runtime.getVersions();
+    expect(versions.mcpVersion).toBeNull();
+    expect(versions.skillsVersion).toBeNull();
+  });
+
+  it("getVersions returns real hashes after start", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+    const versions = runtime.getVersions();
+    expect(versions.mcpVersion).not.toBeNull();
+    expect(versions.mcpVersion).toMatch(/^[0-9a-f]{16}$/);
+    expect(versions.skillsVersion).toBeNull(); // no skills configured
+  });
+
+  it("emits registrations_changed on tool change", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+
+    const changedPromise = new Promise<void>((resolve) => {
+      runtime.on("registrations_changed", resolve);
+    });
+
+    // Update listTools to return different tools
+    const mcpInstance = mcpClientInstances[0];
+    mcpInstance.listTools.mockResolvedValue([
+      { name: "query", description: "Run SQL", inputSchema: { type: "object" } },
+      { name: "execute", description: "Execute SQL", inputSchema: { type: "object" } },
+    ]);
+
+    // Trigger tools_changed on the MCP client
+    mcpInstance.emitter.emit("tools_changed");
+
+    await changedPromise;
+
+    const versions = runtime.getVersions();
+    expect(versions.mcpVersion).not.toBeNull();
+  });
+
+  it("does not emit when versions unchanged", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+
+    let emitted = false;
+    runtime.on("registrations_changed", () => { emitted = true; });
+
+    // Trigger tools_changed without changing the actual tools
+    const mcpInstance = mcpClientInstances[0];
+    mcpInstance.emitter.emit("tools_changed");
+
+    // Wait for debounce
+    await new Promise((r) => setTimeout(r, 700));
+    expect(emitted).toBe(false);
+  });
+
+  it("debounces rapid change events", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+
+    let emitCount = 0;
+    runtime.on("registrations_changed", () => { emitCount++; });
+
+    // Update tools so version will change
+    const mcpInstance = mcpClientInstances[0];
+    let toolCount = 1;
+
+    // Fire multiple rapid events, each with slightly different tools
+    for (let i = 0; i < 5; i++) {
+      toolCount++;
+      const tools = Array.from({ length: toolCount }, (_, j) => ({
+        name: `tool_${j}`,
+        description: `Tool ${j}`,
+        inputSchema: { type: "object" },
+      }));
+      mcpInstance.listTools.mockResolvedValue(tools);
+      mcpInstance.emitter.emit("tools_changed");
+    }
+
+    // Wait for debounce
+    await new Promise((r) => setTimeout(r, 800));
+    expect(emitCount).toBe(1);
   });
 });

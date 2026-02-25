@@ -313,6 +313,8 @@ class GatewayServer:
                 protocol_version=protocol_version,
                 gateway_version=gateway_version,
                 integrations=integrations,
+                mcp_version=msg.get("mcpVersion"),
+                skills_version=msg.get("skillsVersion"),
             )
             gw_conn = _GatewayConn(ws, info)
             self._gateways[conn_id] = gw_conn
@@ -352,6 +354,15 @@ class GatewayServer:
                             "skillCount": skill_count,
                         }))
                         gw_conn.info.integrations = integrations
+                        gw_conn.info.mcp_version = msg.get("mcpVersion")
+                        gw_conn.info.skills_version = msg.get("skillsVersion")
+                        if self.on_gateway_updated:
+                            self.on_gateway_updated(gw_conn.info)
+                    elif msg_type == "registrations_changed":
+                        integrations = self._parse_integrations(msg.get("integrations", []))
+                        gw_conn.info.integrations = integrations
+                        gw_conn.info.mcp_version = msg.get("mcpVersion")
+                        gw_conn.info.skills_version = msg.get("skillsVersion")
                         if self.on_gateway_updated:
                             self.on_gateway_updated(gw_conn.info)
             finally:

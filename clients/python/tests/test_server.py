@@ -414,6 +414,68 @@ async def test_call_tool_for_org_no_match(server: GatewayServer):
 
 
 @pytest.mark.asyncio
+async def test_connected_gateway_has_version_fields(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    # Send register with version fields
+    await ws.send(json.dumps({
+        "type": "register",
+        "integrations": [TEST_INTEGRATION],
+        "mcpVersion": "abc123",
+        "skillsVersion": "def456",
+    }))
+    raw = await ws.recv()
+    msg = json.loads(raw)
+    assert msg["type"] == "registered"
+
+    gw = server.connected_gateways[0]
+    assert gw.mcp_version == "abc123"
+    assert gw.skills_version == "def456"
+    await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_connected_gateway_null_versions_by_default(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await register(ws)
+    gw = server.connected_gateways[0]
+    assert gw.mcp_version is None
+    assert gw.skills_version is None
+    await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_registrations_changed_updates_integrations_and_versions(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await register(ws, [TEST_INTEGRATION])
+
+    updated_gateways: list[ConnectedGateway] = []
+    server.on_gateway_updated = lambda gw: updated_gateways.append(gw)
+
+    # Send registrations_changed
+    updated_integration = {
+        **TEST_INTEGRATION,
+        "tools": TEST_INTEGRATION["tools"] + [
+            {"name": "new_tool", "description": "New tool", "inputSchema": {}},
+        ],
+    }
+    await ws.send(json.dumps({
+        "type": "registrations_changed",
+        "integrations": [updated_integration],
+        "mcpVersion": "newversion1234",
+        "skillsVersion": "newskills5678",
+    }))
+
+    await asyncio.sleep(0.1)
+
+    assert len(updated_gateways) == 1
+    gw = server.connected_gateways[0]
+    assert len(gw.integrations[0].tools) == 3
+    assert gw.mcp_version == "newversion1234"
+    assert gw.skills_version == "newskills5678"
+    await ws.close()
+
+
+@pytest.mark.asyncio
 async def test_pong_timeout_disconnects_gateway():
     """Gateway that doesn't respond to pings should be disconnected."""
     srv = GatewayServer(

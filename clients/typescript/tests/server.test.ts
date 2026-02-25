@@ -341,4 +341,62 @@ describe("GatewayServer", () => {
     ]);
     ws.close();
   });
+
+  it("connected gateway has null version fields by default", async () => {
+    const ws = await connectAndAuth(server.url, "gw_valid");
+    await register(ws, []);
+    expect(server.connectedGateways[0].mcpVersion).toBeNull();
+    expect(server.connectedGateways[0].skillsVersion).toBeNull();
+    ws.close();
+  });
+
+  it("connected gateway stores version fields from register", async () => {
+    const ws = await connectAndAuth(server.url, "gw_valid");
+    // Send register with version fields
+    ws.send(JSON.stringify({
+      type: "register",
+      integrations: [TEST_INTEGRATION],
+      mcpVersion: "abc123",
+      skillsVersion: "def456",
+    }));
+    await new Promise<void>((resolve) => {
+      ws.once("message", (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === "registered") resolve();
+      });
+    });
+
+    expect(server.connectedGateways[0].mcpVersion).toBe("abc123");
+    expect(server.connectedGateways[0].skillsVersion).toBe("def456");
+    ws.close();
+  });
+
+  it("registrations_changed updates integrations and versions and fires callback", async () => {
+    const ws = await connectAndAuth(server.url, "gw_valid");
+    await register(ws, [TEST_INTEGRATION]);
+
+    let updatedGateway: ConnectedGateway | null = null;
+    server.onGatewayUpdated = (gw) => { updatedGateway = gw; };
+
+    // Send registrations_changed
+    ws.send(JSON.stringify({
+      type: "registrations_changed",
+      integrations: [
+        {
+          ...TEST_INTEGRATION,
+          tools: [...TEST_INTEGRATION.tools, { name: "new_tool", description: "New", inputSchema: {} }],
+        },
+      ],
+      mcpVersion: "newversion1234",
+      skillsVersion: "newskills5678",
+    }));
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(updatedGateway).not.toBeNull();
+    expect(server.connectedGateways[0].integrations[0].tools).toHaveLength(3);
+    expect(server.connectedGateways[0].mcpVersion).toBe("newversion1234");
+    expect(server.connectedGateways[0].skillsVersion).toBe("newskills5678");
+    ws.close();
+  });
 });

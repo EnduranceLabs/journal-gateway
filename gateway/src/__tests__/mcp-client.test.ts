@@ -21,6 +21,7 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => {
         content: [{ type: "text", text: '[{"count": 42}]' }],
         isError: false,
       }),
+      setNotificationHandler: vi.fn(),
     })),
   };
 });
@@ -101,6 +102,26 @@ describe("McpClient", () => {
   it("exposes integrationId from definition", () => {
     const client = new McpClient(testDefinition, {}, logger);
     expect(client.integrationId).toBe("test-integration");
+  });
+
+  it("emits tools_changed on MCP notifications/tools/list_changed", async () => {
+    const { Client } = await import(
+      "@modelcontextprotocol/sdk/client/index.js"
+    );
+    const client = new McpClient(testDefinition, {}, logger);
+    await client.start();
+
+    const changedPromise = new Promise<void>((resolve) => {
+      client.on("tools_changed", resolve);
+    });
+
+    // setNotificationHandler was called with (schema, handler)
+    const mockClient = vi.mocked(Client).mock.results[0].value;
+    expect(mockClient.setNotificationHandler).toHaveBeenCalled();
+    const handler = mockClient.setNotificationHandler.mock.calls[0][1];
+    await handler();
+
+    await changedPromise;
   });
 
   it("emits crash event when transport closes unexpectedly", async () => {

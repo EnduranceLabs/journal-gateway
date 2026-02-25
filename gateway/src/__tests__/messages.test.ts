@@ -7,6 +7,7 @@ import {
   ToolResultMessageSchema,
   ToolErrorMessageSchema,
   PongMessageSchema,
+  RegistrationsChangedMessageSchema,
   AuthenticatedMessageSchema,
   AuthErrorMessageSchema,
   RegisteredMessageSchema,
@@ -44,6 +45,50 @@ describe("Gateway → Service messages", () => {
       ],
     };
     expect(RegisterMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses register message with version fields", () => {
+    const msg = {
+      type: "register",
+      integrations: [],
+      mcpVersion: "abcdef0123456789",
+      skillsVersion: "9876543210fedcba",
+    };
+    expect(RegisterMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses register message without version fields", () => {
+    const msg = {
+      type: "register",
+      integrations: [],
+    };
+    const parsed = RegisterMessageSchema.parse(msg);
+    expect(parsed.mcpVersion).toBeUndefined();
+    expect(parsed.skillsVersion).toBeUndefined();
+  });
+
+  it("parses registrations_changed message", () => {
+    const msg = {
+      type: "registrations_changed",
+      integrations: [
+        {
+          id: "pg",
+          name: "PostgreSQL",
+          description: "DB",
+          tools: [{ name: "query", description: "Run SQL", inputSchema: {} }],
+        },
+      ],
+      mcpVersion: "abcdef0123456789",
+    };
+    expect(RegistrationsChangedMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses registrations_changed via gateway union", () => {
+    const msg = {
+      type: "registrations_changed",
+      integrations: [],
+    };
+    expect(() => GatewayMessageSchema.parse(msg)).not.toThrow();
   });
 
   it("parses register message with skills inside integration", () => {
@@ -130,6 +175,7 @@ describe("Gateway → Service messages", () => {
         error: { code: "TIMEOUT", message: "timed out" },
       },
       { type: "pong" },
+      { type: "registrations_changed", integrations: [] },
     ];
 
     for (const msg of messages) {

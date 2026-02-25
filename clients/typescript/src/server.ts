@@ -19,6 +19,8 @@ export interface ConnectedGateway {
   protocolVersion: number;
   gatewayVersion: string;
   integrations: Integration[];
+  mcpVersion: string | null;
+  skillsVersion: string | null;
 }
 
 interface PendingCall {
@@ -388,10 +390,15 @@ export class GatewayServer {
             })
           );
 
+          const mcpVersion = msg.mcpVersion ?? null;
+          const skillsVersion = msg.skillsVersion ?? null;
+
           const existing = this.gateways.get(connId);
           if (existing) {
             // Re-register: update integrations in-place, preserve pending calls
             existing.gateway.integrations = integrations;
+            existing.gateway.mcpVersion = mcpVersion;
+            existing.gateway.skillsVersion = skillsVersion;
             this.onGatewayUpdated?.(existing.gateway);
           } else {
             const gateway: ConnectedGateway = {
@@ -400,6 +407,8 @@ export class GatewayServer {
               protocolVersion,
               gatewayVersion,
               integrations,
+              mcpVersion,
+              skillsVersion,
             };
 
             const entry: GatewayEntry = {
@@ -448,6 +457,17 @@ export class GatewayServer {
           if (entry?.pongTimer) {
             clearTimeout(entry.pongTimer);
             entry.pongTimer = null;
+          }
+          break;
+        }
+
+        case "registrations_changed": {
+          const entry = this.gateways.get(connId);
+          if (entry) {
+            entry.gateway.integrations = msg.integrations;
+            entry.gateway.mcpVersion = msg.mcpVersion ?? null;
+            entry.gateway.skillsVersion = msg.skillsVersion ?? null;
+            this.onGatewayUpdated?.(entry.gateway);
           }
           break;
         }

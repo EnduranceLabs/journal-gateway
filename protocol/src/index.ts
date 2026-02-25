@@ -29,6 +29,7 @@ export {
   ToolResultMessageSchema,
   ToolErrorMessageSchema,
   PongMessageSchema,
+  RegistrationsChangedMessageSchema,
   GatewayMessageSchema,
   AuthenticatedMessageSchema,
   AuthErrorMessageSchema,
@@ -42,6 +43,7 @@ export {
   type ToolResultMessage,
   type ToolErrorMessage,
   type PongMessage,
+  type RegistrationsChangedMessage,
   type GatewayMessage,
   type AuthenticatedMessage,
   type AuthErrorMessage,
@@ -52,5 +54,5 @@ export {
   type ServiceMessage,
 } from "./messages.js";
 
-export type { IntegrationProvider, GatewayConfig } from "./provider.js";
+export type { IntegrationProvider, GatewayConfig, RegistrationVersions } from "./provider.js";
 export { IntegrationNotFoundError } from "./provider.js";

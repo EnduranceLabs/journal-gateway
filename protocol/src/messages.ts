@@ -16,6 +16,8 @@ export type AuthenticateMessage = z.infer<typeof AuthenticateMessageSchema>;
 export const RegisterMessageSchema = z.object({
   type: z.literal("register"),
   integrations: z.array(IntegrationSchema),
+  mcpVersion: z.string().optional(),
+  skillsVersion: z.string().optional(),
 });
 
 export type RegisterMessage = z.infer<typeof RegisterMessageSchema>;
@@ -42,12 +44,22 @@ export const PongMessageSchema = z.object({
 
 export type PongMessage = z.infer<typeof PongMessageSchema>;
 
+export const RegistrationsChangedMessageSchema = z.object({
+  type: z.literal("registrations_changed"),
+  integrations: z.array(IntegrationSchema),
+  mcpVersion: z.string().optional(),
+  skillsVersion: z.string().optional(),
+});
+
+export type RegistrationsChangedMessage = z.infer<typeof RegistrationsChangedMessageSchema>;
+
 export const GatewayMessageSchema = z.discriminatedUnion("type", [
   AuthenticateMessageSchema,
   RegisterMessageSchema,
   ToolResultMessageSchema,
   ToolErrorMessageSchema,
   PongMessageSchema,
+  RegistrationsChangedMessageSchema,
 ]);
 
 export type GatewayMessage = z.infer<typeof GatewayMessageSchema>;

@@ -3,18 +3,29 @@ import {
   type Integration,
   type ToolResult,
   type IntegrationProvider,
+  type RegistrationVersions,
 } from "@journal/gateway-protocol";
+import { EventEmitter } from "node:events";
 import { Logger } from "./common/logger.js";
 import type { RuntimeConfig } from "./config.js";
 import { McpClient } from "./mcp-client.js";
 import { SkillClient } from "./skill-client.js";
+import { computeVersionHash } from "./version-hash.js";
 
-export class Runtime implements IntegrationProvider {
+export interface RuntimeEvents {
+  registrations_changed: [];
+}
+
+export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationProvider {
   private processes = new Map<string, McpClient>();
   private logger: Logger;
   private skillClient: SkillClient;
+  private mcpVersion: string | null = null;
+  private skillsVersion: string | null = null;
+  private changeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private config: RuntimeConfig) {
+    super();
     this.logger = new Logger(config.logLevel);
     this.skillClient = new SkillClient(config.skillsDir);
   }
@@ -33,6 +44,12 @@ export class Runtime implements IntegrationProvider {
         this.logger.error(`Integration "${definition.id}" crashed`, {
           error: error.message,
         });
+        this.scheduleChangeCheck();
+      });
+
+      mcpClient.on("tools_changed", () => {
+        this.logger.info(`Integration "${definition.id}" tools changed`);
+        this.scheduleChangeCheck();
       });
 
       await mcpClient.start();
@@ -41,9 +58,25 @@ export class Runtime implements IntegrationProvider {
 
     await this.skillClient.load();
 
+    this.skillClient.on("skills_changed", () => {
+      this.logger.info("Skills changed on disk");
+      this.scheduleChangeCheck();
+    });
+    this.skillClient.startWatching();
+
+    // Compute initial versions
+    await this.recomputeVersions();
+
     this.logger.info("Runtime started", {
       integrationCount: this.processes.size,
     });
+  }
+
+  getVersions(): RegistrationVersions {
+    return {
+      mcpVersion: this.mcpVersion,
+      skillsVersion: this.skillsVersion,
+    };
   }
 
   async getRegistrations(): Promise<Integration[]> {
@@ -83,9 +116,47 @@ export class Runtime implements IntegrationProvider {
 
   async stop(): Promise<void> {
     this.logger.info("Stopping runtime");
+
+    if (this.changeDebounceTimer) {
+      clearTimeout(this.changeDebounceTimer);
+      this.changeDebounceTimer = null;
+    }
+
+    this.skillClient.stopWatching();
+
     const stops = Array.from(this.processes.values()).map((p) => p.stop());
     await Promise.allSettled(stops);
     this.processes.clear();
     this.logger.info("Runtime stopped");
+  }
+
+  private scheduleChangeCheck(): void {
+    if (this.changeDebounceTimer) clearTimeout(this.changeDebounceTimer);
+    this.changeDebounceTimer = setTimeout(async () => {
+      this.changeDebounceTimer = null;
+      const changed = await this.recomputeVersions();
+      if (changed) {
+        this.emit("registrations_changed");
+      }
+    }, 500);
+  }
+
+  private async recomputeVersions(): Promise<boolean> {
+    const registrations = await this.getRegistrations();
+
+    const mcpIntegrations = registrations.filter((r) => r.id !== "skills");
+    const skillIntegrations = registrations.filter((r) => r.id === "skills");
+
+    const newMcpVersion = computeVersionHash(mcpIntegrations);
+    const newSkillsVersion = computeVersionHash(skillIntegrations);
+
+    const changed =
+      newMcpVersion !== this.mcpVersion ||
+      newSkillsVersion !== this.skillsVersion;
+
+    this.mcpVersion = newMcpVersion;
+    this.skillsVersion = newSkillsVersion;
+
+    return changed;
   }
 }

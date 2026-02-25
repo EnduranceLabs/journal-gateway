@@ -26,6 +26,7 @@ export class GatewayConnection {
   private reconnectDelay = RECONNECT_INITIAL_MS;
   private closed = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private changeListener: (() => void) | null = null;
 
   constructor(
     private config: GatewayConfig,
@@ -91,7 +92,13 @@ export class GatewayConnection {
             });
 
             const integrations = await this.provider.getRegistrations();
-            this.send({ type: "register", integrations });
+            const versions = this.provider.getVersions();
+            this.send({
+              type: "register",
+              integrations,
+              ...(versions.mcpVersion ? { mcpVersion: versions.mcpVersion } : {}),
+              ...(versions.skillsVersion ? { skillsVersion: versions.skillsVersion } : {}),
+            });
 
             registerTimer = setTimeout(() => {
               if (!registered) {
@@ -121,6 +128,10 @@ export class GatewayConnection {
               toolCount: msg.toolCount,
               ...(msg.skillCount != null ? { skillCount: msg.skillCount } : {}),
             });
+
+            // Subscribe to provider change events after first registration
+            this.subscribeToChanges(ws);
+
             resolve();
             break;
           }
@@ -138,7 +149,13 @@ export class GatewayConnection {
           case "refresh_registrations": {
             this.logger.info("Service requested registration refresh");
             const refreshed = await this.provider.getRegistrations();
-            this.send({ type: "register", integrations: refreshed });
+            const refreshVersions = this.provider.getVersions();
+            this.send({
+              type: "register",
+              integrations: refreshed,
+              ...(refreshVersions.mcpVersion ? { mcpVersion: refreshVersions.mcpVersion } : {}),
+              ...(refreshVersions.skillsVersion ? { skillsVersion: refreshVersions.skillsVersion } : {}),
+            });
             break;
           }
         }
@@ -146,6 +163,7 @@ export class GatewayConnection {
 
       ws.on("close", () => {
         this.logger.warn("WebSocket disconnected");
+        this.unsubscribeFromChanges();
         if (!this.closed && registered) {
           this.scheduleReconnect();
         }
@@ -159,6 +177,35 @@ export class GatewayConnection {
         }
       });
     });
+  }
+
+  private subscribeToChanges(ws: WebSocket): void {
+    this.unsubscribeFromChanges();
+
+    if (!this.provider.on) return;
+
+    this.changeListener = async () => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+
+      this.logger.info("Provider registrations changed, notifying service");
+      const integrations = await this.provider.getRegistrations();
+      const versions = this.provider.getVersions();
+      this.send({
+        type: "registrations_changed",
+        integrations,
+        ...(versions.mcpVersion ? { mcpVersion: versions.mcpVersion } : {}),
+        ...(versions.skillsVersion ? { skillsVersion: versions.skillsVersion } : {}),
+      });
+    };
+
+    this.provider.on("registrations_changed", this.changeListener);
+  }
+
+  private unsubscribeFromChanges(): void {
+    if (this.changeListener && this.provider.off) {
+      this.provider.off("registrations_changed", this.changeListener);
+      this.changeListener = null;
+    }
   }
 
   private async handleToolCall(
@@ -253,6 +300,7 @@ export class GatewayConnection {
 
   async close(): Promise<void> {
     this.closed = true;
+    this.unsubscribeFromChanges();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

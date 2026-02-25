@@ -68,6 +68,13 @@ describe("Integration: TS client <-> real gateway", () => {
     expect(server.connectedGateways[0].integrations).toHaveLength(0);
   });
 
+  it("connected gateway includes version fields (null when no MCP/skills configured)", () => {
+    const gw = server.connectedGateways[0];
+    // With no MCP servers or skills, both should be null
+    expect(gw.mcpVersion).toBeNull();
+    expect(gw.skillsVersion).toBeNull();
+  });
+
   it("rejects gateway with invalid token", async () => {
     const bad = startGateway(server.url, "gw_wrong");
 

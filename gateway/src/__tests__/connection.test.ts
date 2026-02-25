@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GatewayConnection } from "../connection.js";
-import type { GatewayConfig, IntegrationProvider } from "@journal/gateway-protocol";
+import type { GatewayConfig, IntegrationProvider, RegistrationVersions } from "@journal/gateway-protocol";
 import { EventEmitter } from "node:events";
 
 // Mock ws
@@ -43,7 +43,16 @@ const config: GatewayConfig = {
   logLevel: "error",
 };
 
-function createMockProvider(): IntegrationProvider {
+function createMockProvider(): IntegrationProvider & {
+  _emitter: EventEmitter;
+  _versions: RegistrationVersions;
+} {
+  const emitter = new EventEmitter();
+  const versions: RegistrationVersions = {
+    mcpVersion: "abcdef0123456789",
+    skillsVersion: null,
+  };
+
   return {
     getRegistrations: vi.fn().mockResolvedValue([
       {
@@ -59,11 +68,16 @@ function createMockProvider(): IntegrationProvider {
         ],
       },
     ]),
+    getVersions: vi.fn().mockImplementation(() => ({ ...versions })),
     callTool: vi.fn().mockResolvedValue({
       content: [{ type: "text", text: "result" }],
     }),
     start: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),
+    on: emitter.on.bind(emitter),
+    off: emitter.off.bind(emitter),
+    _emitter: emitter,
+    _versions: versions,
   };
 }
 
@@ -117,6 +131,102 @@ describe("GatewayConnection", () => {
 
     await connectPromise;
     await conn.close();
+  });
+
+  it("includes versions in initial register message", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    const connectPromise = conn.connect();
+
+    await new Promise((r) => setTimeout(r, 10));
+    const ws = mockWsInstances[0];
+
+    ws.emit("message", JSON.stringify({
+      type: "authenticated",
+      organizationId: "org_123",
+    }));
+
+    await new Promise((r) => setTimeout(r, 10));
+    const registerMsg = JSON.parse(ws.sent[1]);
+    expect(registerMsg.type).toBe("register");
+    expect(registerMsg.mcpVersion).toBe("abcdef0123456789");
+    expect(registerMsg.skillsVersion).toBeUndefined(); // null is omitted
+
+    ws.emit("message", JSON.stringify({
+      type: "registered",
+      integrationCount: 1,
+      toolCount: 1,
+    }));
+
+    await connectPromise;
+    await conn.close();
+  });
+
+  it("sends registrations_changed on provider event", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    const connectPromise = conn.connect();
+
+    await new Promise((r) => setTimeout(r, 10));
+    const ws = mockWsInstances[0];
+
+    // Complete connection
+    ws.emit("message", JSON.stringify({
+      type: "authenticated",
+      organizationId: "org_123",
+    }));
+    await new Promise((r) => setTimeout(r, 10));
+    ws.emit("message", JSON.stringify({
+      type: "registered",
+      integrationCount: 1,
+      toolCount: 1,
+    }));
+    await connectPromise;
+
+    // Clear sent messages
+    ws.sent.length = 0;
+
+    // Emit registrations_changed from provider
+    provider._emitter.emit("registrations_changed");
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(ws.sent).toHaveLength(1);
+    const changeMsg = JSON.parse(ws.sent[0]);
+    expect(changeMsg.type).toBe("registrations_changed");
+    expect(changeMsg.integrations).toHaveLength(1);
+    expect(changeMsg.mcpVersion).toBe("abcdef0123456789");
+
+    await conn.close();
+  });
+
+  it("cleans up change listener on close", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    const connectPromise = conn.connect();
+
+    await new Promise((r) => setTimeout(r, 10));
+    const ws = mockWsInstances[0];
+
+    ws.emit("message", JSON.stringify({
+      type: "authenticated",
+      organizationId: "org_123",
+    }));
+    await new Promise((r) => setTimeout(r, 10));
+    ws.emit("message", JSON.stringify({
+      type: "registered",
+      integrationCount: 1,
+      toolCount: 1,
+    }));
+    await connectPromise;
+
+    // Close should unsubscribe
+    await conn.close();
+
+    // Verify no listeners remain
+    expect(provider._emitter.listenerCount("registrations_changed")).toBe(0);
   });
 
   it("handles auth error", async () => {
@@ -212,7 +322,7 @@ describe("GatewayConnection", () => {
     await conn.close();
   });
 
-  it("responds to refresh_registrations by sending a new register message", async () => {
+  it("responds to refresh_registrations with versions", async () => {
     const provider = createMockProvider();
     const conn = new GatewayConnection(config, provider);
 
@@ -245,7 +355,7 @@ describe("GatewayConnection", () => {
     const registerMsg = JSON.parse(ws.sent[0]);
     expect(registerMsg.type).toBe("register");
     expect(registerMsg.integrations).toHaveLength(1);
-    expect(registerMsg.integrations[0].id).toBe("postgresql");
+    expect(registerMsg.mcpVersion).toBe("abcdef0123456789");
 
     // Verify provider.getRegistrations was called again
     expect(provider.getRegistrations).toHaveBeenCalledTimes(2);

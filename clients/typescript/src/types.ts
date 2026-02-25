@@ -10,12 +10,15 @@ export type {
   GatewayErrorCode,
   GatewayMessage,
   RefreshRegistrationsMessage,
+  RegistrationsChangedMessage,
+  RegistrationVersions,
   ServiceMessage,
 } from "@journal/gateway-protocol";
 
 export {
   GatewayMessageSchema,
   RefreshRegistrationsMessageSchema,
+  RegistrationsChangedMessageSchema,
   ServiceMessageSchema,
   IntegrationSchema,
   ToolResultSchema,
