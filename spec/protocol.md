@@ -1,6 +1,6 @@
 # Journal Gateway Protocol
 
-Version: `1`
+Version: `2`
 
 ## Problem
 
@@ -24,35 +24,30 @@ Gateway                                  Service
   |---- authenticate ---------------------->|
   |<--- authenticated / auth_error ---------|
   |                                         |
-  |---- register -------------------------->|
-  |<--- registered -------------------------|
+  |---- version_changed ------------------>|  (fire-and-forget)
   |                                         |
   |          +-- Steady State --+           |
-  |          |                  |           |
-  |<-------- | tool_call -------|----------|
-  |--------- | tool_result ----|---------->|
+  |<---------| get_versions ----|---------->|
+  |----------| versions --------|---------->|
+  |<---------| get_tools -------|---------->|
+  |----------| tools -----------|---------->|
+  |<---------| get_skills ------|---------->|
+  |----------| skills ----------|---------->|
+  |<---------| tool_call -------|---------->|
+  |----------| tool_result -----|---------->|
   |          | (or tool_error)  |           |
-  |          |                  |           |
-  |<-------- | ping ------------|----------|
-  |--------- | pong ------------|---------->|
-  |          |                  |           |
-  |<-------- | refresh_reg... --|----------|
-  |--------- | register -------|---------->|
-  |<-------- | registered -----|----------|
-  |          |                  |           |
-  |--------- | registrations_ -|---------->|
-  |          | changed (push)  |           |
-  |          |                  |           |
+  |<---------| ping ------------|---------->|
+  |----------| pong ------------|---------->|
+  |----------| version_changed -|---------->|  (on runtime change)
   |          +------------------+           |
-  |                                         |
 ```
 
 1. The gateway opens a WebSocket connection to the service endpoint.
 2. It sends an `authenticate` message with its token and version info.
-3. On success (`authenticated`), it sends a `register` message declaring all available integrations and their tools.
-4. The connection enters steady state: the service sends `tool_call` requests and `ping` heartbeats; the gateway responds with `tool_result`/`tool_error` and `pong`.
-5. At any time during steady state, the service may send `refresh_registrations` to request the gateway to re-send its integrations. The gateway responds with a standard `register` message. This allows the service to pick up tool/skill changes without a full reconnect.
-6. The gateway may also proactively push a `registrations_changed` message when it detects that its tools or skills have changed. This is fire-and-forget — no acknowledgement is expected. The service should treat it like a re-register: replace the stored integrations for that gateway.
+3. On success (`authenticated`), the gateway sends a `version_changed` message announcing its current version hashes. The connection is now ready — no registration handshake.
+4. The service may pull tools, skills, or versions at any time using `get_tools`, `get_skills`, or `get_versions`. The gateway responds with `tools`, `skills`, or `versions` respectively.
+5. The service sends `tool_call` requests and `ping` heartbeats; the gateway responds with `tool_result`/`tool_error` and `pong`.
+6. When the gateway detects that its tools or skills have changed at runtime, it sends another `version_changed` message. The service can then decide whether and what to pull.
 
 ## Message Reference
 
@@ -68,32 +63,71 @@ Sent immediately after the WebSocket connection opens.
 |-------|------|----------|-------------|
 | `type` | `"authenticate"` | yes | Message discriminator |
 | `token` | `string` | yes | Gateway auth token (`gw_*` prefix) |
-| `protocolVersion` | `number` | yes | Protocol version (currently `1`) |
+| `protocolVersion` | `number` | yes | Protocol version (currently `2`) |
 | `gatewayVersion` | `string` | yes | Gateway software version (semver) |
 
 ```json
 {
   "type": "authenticate",
   "token": "gw_abc123",
-  "protocolVersion": 1,
+  "protocolVersion": 2,
   "gatewayVersion": "0.1.0"
 }
 ```
 
-#### `register`
+#### `version_changed`
 
-Sent after successful authentication. Declares all available integrations. Each integration can carry tools, skills, or both. Also sent in response to `refresh_registrations`.
+Sent after successful authentication and whenever the gateway detects that its tools or skills have changed at runtime. This is fire-and-forget — the service does not acknowledge it.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | `"register"` | yes | Message discriminator |
-| `integrations` | `Integration[]` | yes | Array of integration registrations |
-| `mcpVersion` | `string` | no | Content hash of MCP tool integrations (see [Versioning](#versioning)) |
-| `skillsVersion` | `string` | no | Content hash of skill integrations (see [Versioning](#versioning)) |
+| `type` | `"version_changed"` | yes | Message discriminator |
+| `mcpVersion` | `string \| null` | yes | Content hash of MCP tool integrations, or null if none |
+| `skillsVersion` | `string \| null` | yes | Content hash of skills, or null if none |
 
 ```json
 {
-  "type": "register",
+  "type": "version_changed",
+  "mcpVersion": "a1b2c3d4e5f67890",
+  "skillsVersion": null
+}
+```
+
+#### `versions`
+
+Response to a `get_versions` request.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"versions"` | yes | Message discriminator |
+| `requestId` | `string` | yes | Correlates with the `get_versions.requestId` |
+| `mcpVersion` | `string \| null` | yes | Current MCP version hash |
+| `skillsVersion` | `string \| null` | yes | Current skills version hash |
+
+```json
+{
+  "type": "versions",
+  "requestId": "pull_001",
+  "mcpVersion": "a1b2c3d4e5f67890",
+  "skillsVersion": null
+}
+```
+
+#### `tools`
+
+Response to a `get_tools` request. Contains all MCP tool integrations.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"tools"` | yes | Message discriminator |
+| `requestId` | `string` | yes | Correlates with the `get_tools.requestId` |
+| `integrations` | `Integration[]` | yes | MCP tool integrations |
+| `mcpVersion` | `string \| null` | yes | Current MCP version hash |
+
+```json
+{
+  "type": "tools",
+  "requestId": "pull_002",
   "integrations": [
     {
       "id": "postgresql",
@@ -105,28 +139,38 @@ Sent after successful authentication. Declares all available integrations. Each 
           "description": "Execute a read-only SQL query",
           "inputSchema": {
             "type": "object",
-            "properties": {
-              "sql": { "type": "string" }
-            },
+            "properties": { "sql": { "type": "string" } },
             "required": ["sql"]
           }
         }
       ]
-    },
-    {
-      "id": "skills",
-      "name": "Skills",
-      "description": "Loaded from /opt/journal/skills",
-      "tools": [],
-      "skills": [
-        {
-          "id": "review-pr",
-          "content": "You are reviewing a pull request. Follow these steps..."
-        }
-      ]
     }
   ],
-  "mcpVersion": "a1b2c3d4e5f67890",
+  "mcpVersion": "a1b2c3d4e5f67890"
+}
+```
+
+#### `skills`
+
+Response to a `get_skills` request. Contains all skills.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"skills"` | yes | Message discriminator |
+| `requestId` | `string` | yes | Correlates with the `get_skills.requestId` |
+| `skills` | `Skill[]` | yes | Array of skills |
+| `skillsVersion` | `string \| null` | yes | Current skills version hash |
+
+```json
+{
+  "type": "skills",
+  "requestId": "pull_003",
+  "skills": [
+    {
+      "id": "review-pr",
+      "content": "You are reviewing a pull request. Follow these steps..."
+    }
+  ],
   "skillsVersion": "0987654321fedcba"
 }
 ```
@@ -186,37 +230,6 @@ Sent in response to a `ping`.
 { "type": "pong" }
 ```
 
-#### `registrations_changed`
-
-Proactively sent by the gateway when it detects that its tools or skills have changed at runtime (e.g., an MCP server restarted with different tools, or a skill file was added to disk). This is fire-and-forget — the service does not acknowledge it.
-
-The service should treat this the same as a re-register: replace the stored integrations for the gateway and notify any listeners. The `integrations` array is always the full current set, not a diff.
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `type` | `"registrations_changed"` | yes | Message discriminator |
-| `integrations` | `Integration[]` | yes | Full updated integration list |
-| `mcpVersion` | `string` | no | Content hash of MCP tool integrations (see [Versioning](#versioning)) |
-| `skillsVersion` | `string` | no | Content hash of skill integrations (see [Versioning](#versioning)) |
-
-```json
-{
-  "type": "registrations_changed",
-  "integrations": [
-    {
-      "id": "postgresql",
-      "name": "PostgreSQL",
-      "description": "Query PostgreSQL databases",
-      "tools": [
-        { "name": "query", "description": "Execute SQL", "inputSchema": {} },
-        { "name": "execute", "description": "Execute DDL", "inputSchema": {} }
-      ]
-    }
-  ],
-  "mcpVersion": "f0e1d2c3b4a59687"
-}
-```
-
 ### Service -> Gateway
 
 #### `authenticated`
@@ -253,24 +266,43 @@ Sent when authentication fails.
 }
 ```
 
-#### `registered`
+#### `get_versions`
 
-Sent after successful registration.
+Request current version hashes from the gateway.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | `"registered"` | yes | Message discriminator |
-| `integrationCount` | `number` | yes | Number of registered integrations |
-| `toolCount` | `number` | yes | Total number of registered tools |
-| `skillCount` | `number` | no | Number of registered skills |
+| `type` | `"get_versions"` | yes | Message discriminator |
+| `requestId` | `string` | yes | Request ID for correlation |
 
 ```json
-{
-  "type": "registered",
-  "integrationCount": 1,
-  "toolCount": 2,
-  "skillCount": 1
-}
+{ "type": "get_versions", "requestId": "pull_001" }
+```
+
+#### `get_tools`
+
+Request MCP tool integrations from the gateway.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"get_tools"` | yes | Message discriminator |
+| `requestId` | `string` | yes | Request ID for correlation |
+
+```json
+{ "type": "get_tools", "requestId": "pull_002" }
+```
+
+#### `get_skills`
+
+Request skills from the gateway.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"get_skills"` | yes | Message discriminator |
+| `requestId` | `string` | yes | Request ID for correlation |
+
+```json
+{ "type": "get_skills", "requestId": "pull_003" }
 ```
 
 #### `tool_call`
@@ -307,25 +339,13 @@ Heartbeat sent by the service.
 { "type": "ping" }
 ```
 
-#### `refresh_registrations`
-
-Requests the gateway to re-send its integrations. The gateway responds with a standard `register` message (which the service handles as a re-registration, updating integrations in-place without dropping pending tool calls).
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `type` | `"refresh_registrations"` | yes | Message discriminator |
-
-```json
-{ "type": "refresh_registrations" }
-```
-
 ## Data Types
 
 The canonical definitions live in `protocol/src/` as Zod schemas. The tables below are a prose summary for implementors working in other languages.
 
 ### Integration
 
-An integration is the umbrella concept for capabilities added to the gateway. It can provide tools (callable by the agent), skills (prompt templates), or both.
+An integration is the umbrella concept for capabilities added to the gateway. It provides tools (callable by the agent).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -390,7 +410,7 @@ A prompt/workflow template that guides agent behavior. Skills are raw Markdown c
 | Timeout | Duration | Description |
 |---------|----------|-------------|
 | Authentication | 10s | Time to complete auth after WebSocket opens |
-| Registration | 30s | Time to complete registration after auth |
+| Pull response | 30s | Time for gateway to respond to a pull request |
 | Heartbeat interval | 30s | Service sends `ping` every 30s |
 | Pong timeout | 10s | Gateway must respond to `ping` within 10s |
 | Tool call (gateway) | 60s | Gateway must respond to `tool_call` within 60s |
@@ -404,11 +424,13 @@ When the WebSocket connection drops, the gateway reconnects with exponential bac
 - **Backoff multiplier:** 2x
 - **Maximum delay:** 30 seconds
 - **Jitter:** +/-25% randomization on each delay
-- **Reset:** Backoff resets to initial delay after a successful connection (authenticated + registered)
+- **Reset:** Backoff resets to initial delay after a successful connection (authenticated)
 
 ## Concurrency
 
 Multiple `tool_call` messages may be in flight simultaneously. Each carries a unique `requestId` that must be echoed in the corresponding `tool_result` or `tool_error` response. The gateway may process calls in any order.
+
+Similarly, multiple pull requests (`get_versions`, `get_tools`, `get_skills`) may be in flight simultaneously, each with a unique `requestId`.
 
 ## Error Codes
 
@@ -421,13 +443,13 @@ Multiple `tool_call` messages may be in flight simultaneously. Each carries a un
 
 ## Versioning
 
-The `register` and `registrations_changed` messages may include optional `mcpVersion` and `skillsVersion` fields. These are content hashes (first 16 hex characters of a SHA-256 digest) computed over the integrations for each subsystem using stable JSON serialization.
+The `version_changed` message includes `mcpVersion` and `skillsVersion` fields. These are content hashes (first 16 hex characters of a SHA-256 digest) computed over the integrations for each subsystem using stable JSON serialization.
 
 - **`mcpVersion`** covers all MCP tool integrations. Changes when tools are added, removed, or modified.
-- **`skillsVersion`** covers the skills integration. Changes when skill files are added, removed, or edited.
-- Either field is omitted (or absent) when the corresponding subsystem has no integrations.
+- **`skillsVersion`** covers skills. Changes when skill files are added, removed, or edited.
+- Either field is `null` when the corresponding subsystem has no integrations.
 
-Version hashes are **informational**. They let the service quickly determine which subsystem changed without diffing the full integrations array. The `integrations` array is always the source of truth. Same content produces the same hash across restarts — there are no false positives from gateway restarts alone.
+Version hashes are the **primary signal** for change detection. The service uses them to decide whether to pull updated tools or skills. Same content produces the same hash across restarts — there are no false positives from gateway restarts alone.
 
 ## Security Invariants
 

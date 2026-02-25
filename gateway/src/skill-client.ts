@@ -66,6 +66,10 @@ export class SkillClient extends EventEmitter<SkillClientEvents> {
     }
   }
 
+  getSkills(): Skill[] {
+    return this.skills;
+  }
+
   getIntegrations(): Integration[] {
     if (this.skills.length === 0) return [];
     return [

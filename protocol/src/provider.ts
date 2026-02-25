@@ -1,4 +1,5 @@
 import type { Integration, ToolResult } from "./integrations.js";
+import type { Skill } from "./skills.js";
 
 export interface RegistrationVersions {
   mcpVersion: string | null;
@@ -6,13 +7,14 @@ export interface RegistrationVersions {
 }
 
 export interface IntegrationProvider {
-  getRegistrations(): Promise<Integration[]>;
+  getTools(): Promise<Integration[]>;
+  getSkills(): Skill[];
   getVersions(): RegistrationVersions;
   callTool(integrationId: string, toolName: string, args: Record<string, unknown>): Promise<ToolResult>;
   start(): Promise<void>;
   stop(): Promise<void>;
-  on?(event: "registrations_changed", listener: () => void): void;
-  off?(event: "registrations_changed", listener: () => void): void;
+  on?(event: "versions_changed", listener: () => void): void;
+  off?(event: "versions_changed", listener: () => void): void;
 }
 
 export class IntegrationNotFoundError extends Error {

@@ -1,6 +1,7 @@
 import {
   IntegrationNotFoundError,
   type Integration,
+  type Skill,
   type ToolResult,
   type IntegrationProvider,
   type RegistrationVersions,
@@ -13,7 +14,7 @@ import { SkillClient } from "./skill-client.js";
 import { computeVersionHash } from "./version-hash.js";
 
 export interface RuntimeEvents {
-  registrations_changed: [];
+  versions_changed: [];
 }
 
 export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationProvider {
@@ -79,15 +80,15 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
     };
   }
 
-  async getRegistrations(): Promise<Integration[]> {
-    const registrations: Integration[] = [];
+  async getTools(): Promise<Integration[]> {
+    const integrations: Integration[] = [];
 
     for (const definition of this.config.mcpServers) {
       const mcpClient = this.processes.get(definition.id);
       if (!mcpClient || !mcpClient.isRunning()) continue;
 
       const tools = await mcpClient.listTools();
-      registrations.push({
+      integrations.push({
         id: definition.id,
         name: definition.name,
         description: definition.description,
@@ -95,7 +96,11 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
       });
     }
 
-    return [...registrations, ...this.skillClient.getIntegrations()];
+    return integrations;
+  }
+
+  getSkills(): Skill[] {
+    return this.skillClient.getSkills();
   }
 
   async callTool(
@@ -136,16 +141,14 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
       this.changeDebounceTimer = null;
       const changed = await this.recomputeVersions();
       if (changed) {
-        this.emit("registrations_changed");
+        this.emit("versions_changed");
       }
     }, 500);
   }
 
   private async recomputeVersions(): Promise<boolean> {
-    const registrations = await this.getRegistrations();
-
-    const mcpIntegrations = registrations.filter((r) => r.id !== "skills");
-    const skillIntegrations = registrations.filter((r) => r.id === "skills");
+    const mcpIntegrations = await this.getTools();
+    const skillIntegrations = this.skillClient.getIntegrations();
 
     const newMcpVersion = computeVersionHash(mcpIntegrations);
     const newSkillsVersion = computeVersionHash(skillIntegrations);

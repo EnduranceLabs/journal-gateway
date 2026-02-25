@@ -44,17 +44,20 @@ vi.mock("../mcp-client.js", () => {
 
 // Mock SkillClient
 const skillClientEmitter = new EventEmitter();
+const mockSkillClient = {
+  load: vi.fn().mockResolvedValue(undefined),
+  getIntegrations: vi.fn().mockReturnValue([]),
+  getSkills: vi.fn().mockReturnValue([]),
+  startWatching: vi.fn(),
+  stopWatching: vi.fn(),
+  on: skillClientEmitter.on.bind(skillClientEmitter),
+  off: skillClientEmitter.off.bind(skillClientEmitter),
+  emit: skillClientEmitter.emit.bind(skillClientEmitter),
+};
+
 vi.mock("../skill-client.js", () => {
   return {
-    SkillClient: vi.fn().mockImplementation(() => ({
-      load: vi.fn().mockResolvedValue(undefined),
-      getIntegrations: vi.fn().mockReturnValue([]),
-      startWatching: vi.fn(),
-      stopWatching: vi.fn(),
-      on: skillClientEmitter.on.bind(skillClientEmitter),
-      off: skillClientEmitter.off.bind(skillClientEmitter),
-      emit: skillClientEmitter.emit.bind(skillClientEmitter),
-    })),
+    SkillClient: vi.fn().mockImplementation(() => mockSkillClient),
   };
 });
 
@@ -86,22 +89,44 @@ describe("Runtime", () => {
     vi.clearAllMocks();
     mcpClientInstances.length = 0;
     skillClientEmitter.removeAllListeners();
+    mockSkillClient.getSkills.mockReturnValue([]);
+    mockSkillClient.getIntegrations.mockReturnValue([]);
   });
 
   it("starts all configured integrations", async () => {
     const runtime = new Runtime(makeConfig());
     await runtime.start();
-    const registrations = await runtime.getRegistrations();
-    expect(registrations).toHaveLength(1);
-    expect(registrations[0].id).toBe("test-db");
+    const tools = await runtime.getTools();
+    expect(tools).toHaveLength(1);
+    expect(tools[0].id).toBe("test-db");
   });
 
-  it("generates registration payload with tools", async () => {
+  it("generates tool integrations with tools", async () => {
     const runtime = new Runtime(makeConfig());
     await runtime.start();
-    const registrations = await runtime.getRegistrations();
-    expect(registrations[0].tools).toHaveLength(1);
-    expect(registrations[0].tools[0].name).toBe("query");
+    const tools = await runtime.getTools();
+    expect(tools[0].tools).toHaveLength(1);
+    expect(tools[0].tools[0].name).toBe("query");
+  });
+
+  it("getSkills returns empty array by default", async () => {
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+    const skills = runtime.getSkills();
+    expect(skills).toEqual([]);
+  });
+
+  it("getSkills returns skills from skill client", async () => {
+    const testSkills = [
+      { id: "review-pr", content: "Review a PR..." },
+      { id: "deploy", content: "Deploy steps..." },
+    ];
+    mockSkillClient.getSkills.mockReturnValue(testSkills);
+
+    const runtime = new Runtime(makeConfig());
+    await runtime.start();
+    const skills = runtime.getSkills();
+    expect(skills).toEqual(testSkills);
   });
 
   it("routes tool call to correct integration", async () => {
@@ -130,8 +155,8 @@ describe("Runtime", () => {
   it("starts with no integrations", async () => {
     const runtime = new Runtime(makeConfig([]));
     await runtime.start();
-    const registrations = await runtime.getRegistrations();
-    expect(registrations).toHaveLength(0);
+    const tools = await runtime.getTools();
+    expect(tools).toHaveLength(0);
   });
 
   it("getVersions returns null versions before start", () => {
@@ -150,12 +175,12 @@ describe("Runtime", () => {
     expect(versions.skillsVersion).toBeNull(); // no skills configured
   });
 
-  it("emits registrations_changed on tool change", async () => {
+  it("emits versions_changed on tool change", async () => {
     const runtime = new Runtime(makeConfig());
     await runtime.start();
 
     const changedPromise = new Promise<void>((resolve) => {
-      runtime.on("registrations_changed", resolve);
+      runtime.on("versions_changed", resolve);
     });
 
     // Update listTools to return different tools
@@ -179,7 +204,7 @@ describe("Runtime", () => {
     await runtime.start();
 
     let emitted = false;
-    runtime.on("registrations_changed", () => { emitted = true; });
+    runtime.on("versions_changed", () => { emitted = true; });
 
     // Trigger tools_changed without changing the actual tools
     const mcpInstance = mcpClientInstances[0];
@@ -195,7 +220,7 @@ describe("Runtime", () => {
     await runtime.start();
 
     let emitCount = 0;
-    runtime.on("registrations_changed", () => { emitCount++; });
+    runtime.on("versions_changed", () => { emitCount++; });
 
     // Update tools so version will change
     const mcpInstance = mcpClientInstances[0];

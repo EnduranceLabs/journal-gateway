@@ -13,7 +13,7 @@ function connectAndAuth(
         JSON.stringify({
           type: "authenticate",
           token,
-          protocolVersion: 1,
+          protocolVersion: 2,
           gatewayVersion: "0.1.0-test",
         })
       );
@@ -30,18 +30,56 @@ function connectAndAuth(
   });
 }
 
-function register(
+/**
+ * Send version_changed and handle any pull requests from the server.
+ * This replaces the old register() helper.
+ */
+function sendVersionChanged(
   ws: WebSocket,
-  integrations: unknown[] = []
+  integrations: unknown[] = [],
+  options: {
+    mcpVersion?: string | null;
+    skillsVersion?: string | null;
+    skills?: unknown[];
+  } = {}
 ): Promise<void> {
+  const mcpVersion = options.mcpVersion ?? (integrations.length > 0 ? "abc123" : null);
+  const skillsVersion = options.skillsVersion ?? null;
+  const skills = options.skills ?? [];
+
   return new Promise<void>((resolve) => {
-    ws.send(JSON.stringify({ type: "register", integrations }));
-    ws.once("message", (data) => {
+    // Set up handler for pull requests before sending version_changed
+    const handler = (data: any) => {
       const msg = JSON.parse(data.toString());
-      if (msg.type === "registered") {
-        resolve();
+      if (msg.type === "get_tools") {
+        ws.send(JSON.stringify({
+          type: "tools",
+          requestId: msg.requestId,
+          integrations,
+          mcpVersion,
+        }));
+      } else if (msg.type === "get_skills") {
+        ws.send(JSON.stringify({
+          type: "skills",
+          requestId: msg.requestId,
+          skills,
+          skillsVersion,
+        }));
       }
-    });
+    };
+    ws.on("message", handler);
+
+    ws.send(JSON.stringify({
+      type: "version_changed",
+      mcpVersion,
+      skillsVersion,
+    }));
+
+    // Wait for pulls to complete
+    setTimeout(() => {
+      ws.removeListener("message", handler);
+      resolve();
+    }, 100);
   });
 }
 
@@ -74,11 +112,11 @@ describe("GatewayServer", () => {
     await server.stop();
   });
 
-  it("accepts valid token and registers", async () => {
+  it("accepts valid token and connects after version_changed", async () => {
     const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, []);
+    await sendVersionChanged(ws, []);
     expect(server.connectedGateways).toHaveLength(1);
-    expect(server.connectedGateways[0].protocolVersion).toBe(1);
+    expect(server.connectedGateways[0].protocolVersion).toBe(2);
     expect(server.connectedGateways[0].gatewayVersion).toBe("0.1.0-test");
     ws.close();
   });
@@ -91,7 +129,7 @@ describe("GatewayServer", () => {
 
   it("callTool returns result", async () => {
     const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, [TEST_INTEGRATION]);
+    await sendVersionChanged(ws, [TEST_INTEGRATION]);
 
     ws.on("message", (data) => {
       const msg = JSON.parse(data.toString());
@@ -125,7 +163,7 @@ describe("GatewayServer", () => {
 
   it("callTool returns error", async () => {
     const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, [TEST_INTEGRATION]);
+    await sendVersionChanged(ws, [TEST_INTEGRATION]);
 
     ws.on("message", (data) => {
       const msg = JSON.parse(data.toString());
@@ -168,7 +206,7 @@ describe("GatewayServer", () => {
     await server.start();
 
     const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, []);
+    await sendVersionChanged(ws, []);
 
     const pingsReceived: number[] = [];
     ws.on("message", (data) => {
@@ -191,7 +229,7 @@ describe("GatewayServer", () => {
     };
 
     const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, []);
+    await sendVersionChanged(ws, []);
     expect(server.connectedGateways).toHaveLength(1);
 
     ws.close();
@@ -203,7 +241,7 @@ describe("GatewayServer", () => {
 
   it("handles concurrent tool calls correctly", async () => {
     const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, [TEST_INTEGRATION]);
+    await sendVersionChanged(ws, [TEST_INTEGRATION]);
 
     ws.on("message", (data) => {
       const msg = JSON.parse(data.toString());
@@ -236,24 +274,30 @@ describe("GatewayServer", () => {
     ws.close();
   });
 
-  it("re-register updates integrations without losing pending tool calls", async () => {
+  it("version_changed triggers auto-pull and fires onGatewayConnected", async () => {
+    let connected: ConnectedGateway | null = null;
+    server.onGatewayConnected = (gw) => {
+      connected = gw;
+    };
+
     const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, [TEST_INTEGRATION]);
+    await sendVersionChanged(ws, [TEST_INTEGRATION], { mcpVersion: "v1" });
 
-    // Start a tool call but don't resolve it yet
-    let toolCallMsg: any = null;
-    ws.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
-      if (msg.type === "tool_call") {
-        toolCallMsg = msg;
-      }
-    });
+    expect(connected).not.toBeNull();
+    expect(connected!.integrations).toHaveLength(1);
+    expect(connected!.integrations[0].tools).toHaveLength(2);
+    expect(connected!.mcpVersion).toBe("v1");
+    ws.close();
+  });
 
-    const callPromise = server.callTool("test-integration", "echo", { hello: "world" });
-    await new Promise((r) => setTimeout(r, 50));
-    expect(toolCallMsg).not.toBeNull();
+  it("subsequent version_changed fires onGatewayUpdated with pulled data", async () => {
+    let updatedGateway: ConnectedGateway | null = null;
+    server.onGatewayUpdated = (gw) => { updatedGateway = gw; };
 
-    // Re-register with updated integrations (new tool added)
+    const ws = await connectAndAuth(server.url, "gw_valid");
+    await sendVersionChanged(ws, [TEST_INTEGRATION], { mcpVersion: "v1" });
+
+    // Send another version_changed with different version
     const updatedIntegration = {
       ...TEST_INTEGRATION,
       tools: [
@@ -261,71 +305,40 @@ describe("GatewayServer", () => {
         { name: "new_tool", description: "New tool", inputSchema: {} },
       ],
     };
-    await register(ws, [updatedIntegration]);
 
-    // The pending tool call should still be resolvable
-    ws.send(
-      JSON.stringify({
-        type: "tool_result",
-        requestId: toolCallMsg.requestId,
-        result: { content: [{ type: "text", text: "resolved" }] },
-      })
-    );
+    // Handle pull requests for the second version_changed
+    const pullHandler = (data: any) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "get_tools") {
+        ws.send(JSON.stringify({
+          type: "tools",
+          requestId: msg.requestId,
+          integrations: [updatedIntegration],
+          mcpVersion: "v2",
+        }));
+      }
+    };
+    ws.on("message", pullHandler);
 
-    const result = await callPromise;
-    expect(result.content[0]).toEqual({ type: "text", text: "resolved" });
+    ws.send(JSON.stringify({
+      type: "version_changed",
+      mcpVersion: "v2",
+      skillsVersion: null,
+    }));
 
-    // Verify the integrations are updated
-    expect(server.connectedGateways[0].integrations[0].tools).toHaveLength(3);
-    ws.close();
-  });
+    await new Promise((r) => setTimeout(r, 200));
 
-  it("fires onGatewayUpdated on re-register, not onGatewayConnected", async () => {
-    let connectedCount = 0;
-    let updatedCount = 0;
-    let updatedGateway: ConnectedGateway | null = null;
-    server.onGatewayConnected = () => { connectedCount++; };
-    server.onGatewayUpdated = (gw) => { updatedCount++; updatedGateway = gw; };
-
-    const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, [TEST_INTEGRATION]);
-    expect(connectedCount).toBe(1);
-    expect(updatedCount).toBe(0);
-
-    // Re-register
-    await register(ws, [TEST_INTEGRATION]);
-    expect(connectedCount).toBe(1); // Should NOT increment
-    expect(updatedCount).toBe(1);
     expect(updatedGateway).not.toBeNull();
-    expect(updatedGateway!.id).toBeTruthy();
-    ws.close();
-  });
+    expect(server.connectedGateways[0].integrations[0].tools).toHaveLength(3);
+    expect(server.connectedGateways[0].mcpVersion).toBe("v2");
 
-  it("requestRefreshRegistrations sends the message to a gateway", async () => {
-    const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, [TEST_INTEGRATION]);
-
-    const gatewayId = server.connectedGateways[0].id;
-
-    const msgPromise = new Promise<any>((resolve) => {
-      ws.on("message", (data) => {
-        const msg = JSON.parse(data.toString());
-        if (msg.type === "refresh_registrations") {
-          resolve(msg);
-        }
-      });
-    });
-
-    server.requestRefreshRegistrations(gatewayId);
-
-    const msg = await msgPromise;
-    expect(msg.type).toBe("refresh_registrations");
+    ws.removeListener("message", pullHandler);
     ws.close();
   });
 
   it("availableTools aggregates across integrations", async () => {
     const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, [TEST_INTEGRATION]);
+    await sendVersionChanged(ws, [TEST_INTEGRATION]);
 
     expect(server.availableTools).toEqual([
       {
@@ -342,61 +355,24 @@ describe("GatewayServer", () => {
     ws.close();
   });
 
-  it("connected gateway has null version fields by default", async () => {
+  it("connected gateway has null version fields when no tools/skills", async () => {
     const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, []);
+    await sendVersionChanged(ws, []);
     expect(server.connectedGateways[0].mcpVersion).toBeNull();
     expect(server.connectedGateways[0].skillsVersion).toBeNull();
     ws.close();
   });
 
-  it("connected gateway stores version fields from register", async () => {
+  it("connected gateway stores version fields from version_changed", async () => {
     const ws = await connectAndAuth(server.url, "gw_valid");
-    // Send register with version fields
-    ws.send(JSON.stringify({
-      type: "register",
-      integrations: [TEST_INTEGRATION],
+    await sendVersionChanged(ws, [TEST_INTEGRATION], {
       mcpVersion: "abc123",
       skillsVersion: "def456",
-    }));
-    await new Promise<void>((resolve) => {
-      ws.once("message", (data) => {
-        const msg = JSON.parse(data.toString());
-        if (msg.type === "registered") resolve();
-      });
+      skills: [{ id: "review", content: "Review PR..." }],
     });
 
     expect(server.connectedGateways[0].mcpVersion).toBe("abc123");
     expect(server.connectedGateways[0].skillsVersion).toBe("def456");
-    ws.close();
-  });
-
-  it("registrations_changed updates integrations and versions and fires callback", async () => {
-    const ws = await connectAndAuth(server.url, "gw_valid");
-    await register(ws, [TEST_INTEGRATION]);
-
-    let updatedGateway: ConnectedGateway | null = null;
-    server.onGatewayUpdated = (gw) => { updatedGateway = gw; };
-
-    // Send registrations_changed
-    ws.send(JSON.stringify({
-      type: "registrations_changed",
-      integrations: [
-        {
-          ...TEST_INTEGRATION,
-          tools: [...TEST_INTEGRATION.tools, { name: "new_tool", description: "New", inputSchema: {} }],
-        },
-      ],
-      mcpVersion: "newversion1234",
-      skillsVersion: "newskills5678",
-    }));
-
-    await new Promise((r) => setTimeout(r, 100));
-
-    expect(updatedGateway).not.toBeNull();
-    expect(server.connectedGateways[0].integrations[0].tools).toHaveLength(3);
-    expect(server.connectedGateways[0].mcpVersion).toBe("newversion1234");
-    expect(server.connectedGateways[0].skillsVersion).toBe("newskills5678");
     ws.close();
   });
 });

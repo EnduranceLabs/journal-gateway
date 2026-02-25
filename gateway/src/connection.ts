@@ -11,9 +11,8 @@ import {
 import { Logger } from "./common/logger.js";
 import { VERSION } from "./version.js";
 
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 2;
 const AUTH_TIMEOUT_MS = 10_000;
-const REGISTER_TIMEOUT_MS = 30_000;
 const TOOL_CALL_TIMEOUT_MS = 60_000;
 const RECONNECT_INITIAL_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
@@ -50,7 +49,7 @@ export class GatewayConnection {
       this.ws = ws;
 
       let authenticated = false;
-      let registered = false;
+      let ready = false;
 
       const authTimer = setTimeout(() => {
         if (!authenticated) {
@@ -58,8 +57,6 @@ export class GatewayConnection {
           reject(new Error("Authentication timed out"));
         }
       }, AUTH_TIMEOUT_MS);
-
-      let registerTimer: ReturnType<typeof setTimeout> | null = null;
 
       ws.on("open", () => {
         this.logger.info("WebSocket connected, authenticating");
@@ -91,21 +88,22 @@ export class GatewayConnection {
               organizationName: msg.organizationName,
             });
 
-            const integrations = await this.provider.getRegistrations();
+            // Send initial version_changed (fire-and-forget)
             const versions = this.provider.getVersions();
             this.send({
-              type: "register",
-              integrations,
-              ...(versions.mcpVersion ? { mcpVersion: versions.mcpVersion } : {}),
-              ...(versions.skillsVersion ? { skillsVersion: versions.skillsVersion } : {}),
+              type: "version_changed",
+              mcpVersion: versions.mcpVersion,
+              skillsVersion: versions.skillsVersion,
             });
 
-            registerTimer = setTimeout(() => {
-              if (!registered) {
-                ws.close();
-                reject(new Error("Registration timed out"));
-              }
-            }, REGISTER_TIMEOUT_MS);
+            // Subscribe to provider change events
+            this.subscribeToChanges(ws);
+
+            // Connection is ready
+            ready = true;
+            this.reconnectDelay = RECONNECT_INITIAL_MS;
+            this.logger.info("Gateway ready");
+            resolve();
             break;
           }
 
@@ -119,20 +117,38 @@ export class GatewayConnection {
             break;
           }
 
-          case "registered": {
-            if (registerTimer) clearTimeout(registerTimer);
-            registered = true;
-            this.reconnectDelay = RECONNECT_INITIAL_MS;
-            this.logger.info("Integrations registered", {
-              integrationCount: msg.integrationCount,
-              toolCount: msg.toolCount,
-              ...(msg.skillCount != null ? { skillCount: msg.skillCount } : {}),
+          case "get_versions": {
+            const versions = this.provider.getVersions();
+            this.send({
+              type: "versions",
+              requestId: msg.requestId,
+              mcpVersion: versions.mcpVersion,
+              skillsVersion: versions.skillsVersion,
             });
+            break;
+          }
 
-            // Subscribe to provider change events after first registration
-            this.subscribeToChanges(ws);
+          case "get_tools": {
+            const tools = await this.provider.getTools();
+            const versions = this.provider.getVersions();
+            this.send({
+              type: "tools",
+              requestId: msg.requestId,
+              integrations: tools,
+              mcpVersion: versions.mcpVersion,
+            });
+            break;
+          }
 
-            resolve();
+          case "get_skills": {
+            const skills = this.provider.getSkills();
+            const versions = this.provider.getVersions();
+            this.send({
+              type: "skills",
+              requestId: msg.requestId,
+              skills,
+              skillsVersion: versions.skillsVersion,
+            });
             break;
           }
 
@@ -145,26 +161,13 @@ export class GatewayConnection {
             this.send({ type: "pong" });
             break;
           }
-
-          case "refresh_registrations": {
-            this.logger.info("Service requested registration refresh");
-            const refreshed = await this.provider.getRegistrations();
-            const refreshVersions = this.provider.getVersions();
-            this.send({
-              type: "register",
-              integrations: refreshed,
-              ...(refreshVersions.mcpVersion ? { mcpVersion: refreshVersions.mcpVersion } : {}),
-              ...(refreshVersions.skillsVersion ? { skillsVersion: refreshVersions.skillsVersion } : {}),
-            });
-            break;
-          }
         }
       });
 
       ws.on("close", () => {
         this.logger.warn("WebSocket disconnected");
         this.unsubscribeFromChanges();
-        if (!this.closed && registered) {
+        if (!this.closed && ready) {
           this.scheduleReconnect();
         }
       });
@@ -184,26 +187,24 @@ export class GatewayConnection {
 
     if (!this.provider.on) return;
 
-    this.changeListener = async () => {
+    this.changeListener = () => {
       if (ws.readyState !== WebSocket.OPEN) return;
 
-      this.logger.info("Provider registrations changed, notifying service");
-      const integrations = await this.provider.getRegistrations();
+      this.logger.info("Provider versions changed, notifying service");
       const versions = this.provider.getVersions();
       this.send({
-        type: "registrations_changed",
-        integrations,
-        ...(versions.mcpVersion ? { mcpVersion: versions.mcpVersion } : {}),
-        ...(versions.skillsVersion ? { skillsVersion: versions.skillsVersion } : {}),
+        type: "version_changed",
+        mcpVersion: versions.mcpVersion,
+        skillsVersion: versions.skillsVersion,
       });
     };
 
-    this.provider.on("registrations_changed", this.changeListener);
+    this.provider.on("versions_changed", this.changeListener);
   }
 
   private unsubscribeFromChanges(): void {
     if (this.changeListener && this.provider.off) {
-      this.provider.off("registrations_changed", this.changeListener);
+      this.provider.off("versions_changed", this.changeListener);
       this.changeListener = null;
     }
   }

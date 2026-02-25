@@ -103,23 +103,23 @@ Skills are instructions that teach Journal how to perform specific tasks in your
 
 ## Protocol
 
-The gateway communicates with Journal over a WebSocket using a simple JSON protocol. The full specification is in [spec/protocol.md](./spec/protocol.md); this section covers the key ideas.
+The gateway communicates with Journal over a WebSocket using a simple JSON protocol (version 2). The full specification is in [spec/protocol.md](./spec/protocol.md); this section covers the key ideas.
 
 ### Connection flow
 
-The gateway connects **outbound** to the Journal service — no inbound ports are needed. After authenticating with a token, it sends a **register** message declaring all available tools and skills. The service can then invoke tools via the gateway at any time.
+The gateway connects **outbound** to the Journal service — no inbound ports are needed. After authenticating with a token, it sends a **`version_changed`** message announcing its current version hashes. The connection is then ready — no registration handshake needed. The service decides when to fetch tools and skills by sending pull requests (`get_tools`, `get_skills`).
 
 ### Change detection
 
-Tools and skills can change while the gateway is running. An MCP server might restart with different tools, or a skill file might be added to disk. The gateway detects these changes automatically and pushes a **`registrations_changed`** message to the service with the updated integrations. No polling or manual refresh is needed.
+Tools and skills can change while the gateway is running. An MCP server might restart with different tools, or a skill file might be added to disk. The gateway detects these changes automatically and sends a lightweight **`version_changed`** message with updated version hashes. The service can then pull the specific data it needs.
 
-Each registration includes content-based version hashes (`mcpVersion` and `skillsVersion`) so the service can tell at a glance which subsystem changed — or whether anything changed at all. These are informational; the integrations array is always the source of truth.
+Version hashes (`mcpVersion` and `skillsVersion`) are content-based (SHA-256, 16 hex chars). Same content produces the same hash across restarts — the service can tell at a glance whether anything actually changed.
 
 ### What clients should do
 
-Services using the client libraries (TypeScript or Python) should handle `registrations_changed` the same way they handle a re-register: replace the stored integrations for that gateway and notify any listeners. The `onGatewayUpdated` callback fires in both cases. The version fields on `ConnectedGateway` (`mcpVersion` / `skillsVersion`) are available for inspection but don't require special handling.
+Services using the client libraries (TypeScript or Python) receive `onGatewayConnected` after the initial pull completes (integrations are already populated). When the gateway sends `version_changed`, the client auto-pulls what changed and fires `onGatewayUpdated`.
 
-The service can also **pull** updates at any time by sending `refresh_registrations`, which asks the gateway to re-send its current state.
+Services can also explicitly pull at any time using `getVersions()`, `getTools()`, or `getSkills()` on a specific gateway.
 
 ## License
 

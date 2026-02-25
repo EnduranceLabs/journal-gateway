@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { GatewayErrorSchema } from "./errors.js";
 import { IntegrationSchema, ToolResultSchema } from "./integrations.js";
+import { SkillSchema } from "./skills.js";
 
 // --- Gateway → Service messages ---
 
@@ -12,15 +13,6 @@ export const AuthenticateMessageSchema = z.object({
 });
 
 export type AuthenticateMessage = z.infer<typeof AuthenticateMessageSchema>;
-
-export const RegisterMessageSchema = z.object({
-  type: z.literal("register"),
-  integrations: z.array(IntegrationSchema),
-  mcpVersion: z.string().optional(),
-  skillsVersion: z.string().optional(),
-});
-
-export type RegisterMessage = z.infer<typeof RegisterMessageSchema>;
 
 export const ToolResultMessageSchema = z.object({
   type: z.literal("tool_result"),
@@ -44,22 +36,50 @@ export const PongMessageSchema = z.object({
 
 export type PongMessage = z.infer<typeof PongMessageSchema>;
 
-export const RegistrationsChangedMessageSchema = z.object({
-  type: z.literal("registrations_changed"),
-  integrations: z.array(IntegrationSchema),
-  mcpVersion: z.string().optional(),
-  skillsVersion: z.string().optional(),
+export const VersionChangedMessageSchema = z.object({
+  type: z.literal("version_changed"),
+  mcpVersion: z.string().nullable(),
+  skillsVersion: z.string().nullable(),
 });
 
-export type RegistrationsChangedMessage = z.infer<typeof RegistrationsChangedMessageSchema>;
+export type VersionChangedMessage = z.infer<typeof VersionChangedMessageSchema>;
+
+export const VersionsMessageSchema = z.object({
+  type: z.literal("versions"),
+  requestId: z.string(),
+  mcpVersion: z.string().nullable(),
+  skillsVersion: z.string().nullable(),
+});
+
+export type VersionsMessage = z.infer<typeof VersionsMessageSchema>;
+
+export const ToolsMessageSchema = z.object({
+  type: z.literal("tools"),
+  requestId: z.string(),
+  integrations: z.array(IntegrationSchema),
+  mcpVersion: z.string().nullable(),
+});
+
+export type ToolsMessage = z.infer<typeof ToolsMessageSchema>;
+
+export const SkillsMessageSchema = z.object({
+  type: z.literal("skills"),
+  requestId: z.string(),
+  skills: z.array(SkillSchema),
+  skillsVersion: z.string().nullable(),
+});
+
+export type SkillsMessage = z.infer<typeof SkillsMessageSchema>;
 
 export const GatewayMessageSchema = z.discriminatedUnion("type", [
   AuthenticateMessageSchema,
-  RegisterMessageSchema,
   ToolResultMessageSchema,
   ToolErrorMessageSchema,
   PongMessageSchema,
-  RegistrationsChangedMessageSchema,
+  VersionChangedMessageSchema,
+  VersionsMessageSchema,
+  ToolsMessageSchema,
+  SkillsMessageSchema,
 ]);
 
 export type GatewayMessage = z.infer<typeof GatewayMessageSchema>;
@@ -81,15 +101,6 @@ export const AuthErrorMessageSchema = z.object({
 
 export type AuthErrorMessage = z.infer<typeof AuthErrorMessageSchema>;
 
-export const RegisteredMessageSchema = z.object({
-  type: z.literal("registered"),
-  integrationCount: z.number(),
-  toolCount: z.number(),
-  skillCount: z.number().optional(),
-});
-
-export type RegisteredMessage = z.infer<typeof RegisteredMessageSchema>;
-
 export const ToolCallMessageSchema = z.object({
   type: z.literal("tool_call"),
   requestId: z.string(),
@@ -106,19 +117,35 @@ export const PingMessageSchema = z.object({
 
 export type PingMessage = z.infer<typeof PingMessageSchema>;
 
-export const RefreshRegistrationsMessageSchema = z.object({
-  type: z.literal("refresh_registrations"),
+export const GetVersionsMessageSchema = z.object({
+  type: z.literal("get_versions"),
+  requestId: z.string(),
 });
 
-export type RefreshRegistrationsMessage = z.infer<typeof RefreshRegistrationsMessageSchema>;
+export type GetVersionsMessage = z.infer<typeof GetVersionsMessageSchema>;
+
+export const GetToolsMessageSchema = z.object({
+  type: z.literal("get_tools"),
+  requestId: z.string(),
+});
+
+export type GetToolsMessage = z.infer<typeof GetToolsMessageSchema>;
+
+export const GetSkillsMessageSchema = z.object({
+  type: z.literal("get_skills"),
+  requestId: z.string(),
+});
+
+export type GetSkillsMessage = z.infer<typeof GetSkillsMessageSchema>;
 
 export const ServiceMessageSchema = z.discriminatedUnion("type", [
   AuthenticatedMessageSchema,
   AuthErrorMessageSchema,
-  RegisteredMessageSchema,
   ToolCallMessageSchema,
   PingMessageSchema,
-  RefreshRegistrationsMessageSchema,
+  GetVersionsMessageSchema,
+  GetToolsMessageSchema,
+  GetSkillsMessageSchema,
 ]);
 
 export type ServiceMessage = z.infer<typeof ServiceMessageSchema>;
