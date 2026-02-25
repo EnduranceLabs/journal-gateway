@@ -1,9 +1,17 @@
 {
-  "name": "@journal/gateway-protocol",
+  "name": "@journal.one/gateway-protocol",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": { "access": "public" },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"

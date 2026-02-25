@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GatewayConnection } from "../connection.js";
-import type { GatewayConfig, IntegrationProvider, GatewayVersions, Skill } from "@journal/gateway-protocol";
+import type { GatewayConfig, IntegrationProvider, GatewayVersions, Skill } from "@journal.one/gateway-protocol";
 import { EventEmitter } from "node:events";
 
 // Mock ws

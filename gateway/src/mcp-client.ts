@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServerConfig } from "./config.js";
-import type { ToolDefinition, ToolResult, ContentBlock } from "@journal/gateway-protocol";
+import type { ToolDefinition, ToolResult, ContentBlock } from "@journal.one/gateway-protocol";
 import { Logger } from "./common/logger.js";
 import { VERSION } from "./version.js";
 import { EventEmitter } from "node:events";

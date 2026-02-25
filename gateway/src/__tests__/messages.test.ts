@@ -17,7 +17,7 @@ import {
   GetVersionsMessageSchema,
   GetToolsMessageSchema,
   GetSkillsMessageSchema,
-} from "@journal/gateway-protocol";
+} from "@journal.one/gateway-protocol";
 
 describe("Gateway → Service messages", () => {
   it("parses authenticate message", () => {

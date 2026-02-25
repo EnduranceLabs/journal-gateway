@@ -1,32 +1,35 @@
-# @journal/gateway
+# npm Publishing
 
-Connect your tools to the [Journal](https://journal.one) agent via the Journal Gateway.
+Internal guide for publishing Journal Gateway packages to npm.
 
-The gateway connects outbound from your network to the Journal service over WebSocket. Your credentials and data sources never leave your network.
-
-## Install
+## Prerequisites
 
 ```bash
-npm install -g @journal/gateway
+npm login --scope=@journal.one
 ```
 
-## Usage
+## Packages
+
+Three packages are published under `@journal.one/`, in dependency order:
+
+1. `@journal.one/gateway-protocol` — shared Zod schemas and TypeScript types
+2. `@journal.one/gateway` — the gateway CLI
+3. `@journal.one/gateway-client` — TypeScript client library
+
+## Publish
 
 ```bash
-JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
+./packaging/npm/publish.sh
 ```
 
-## Configuration
+The script builds all packages, then publishes protocol first (since the other two depend on it), followed by gateway and client.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `JOURNAL_GATEWAY_TOKEN` | yes | — | Gateway auth token (`gw_*`) |
-| `JOURNAL_GATEWAY_URL` | no | `wss://gateway.journal.one/v1` | WebSocket endpoint |
-| `JOURNAL_GATEWAY_CONFIG` | no | — | Path to config file, or inline JSON |
-| `LOG_LEVEL` | no | `info` | `debug`, `info`, `warn`, `error` |
+## Version bumping
 
-The gateway reads its tool and skill definitions from a JSON config file. Pass it via `--config path/to/file.json` or the `JOURNAL_GATEWAY_CONFIG` env var.
+Update the `version` field in all three `package.json` files in lockstep:
 
-## Documentation
+- `protocol/package.json`
+- `gateway/package.json`
+- `clients/typescript/package.json`
 
-See the full documentation at [github.com/journal/journal-edge](https://github.com/journal/journal-edge).
+Then run `pnpm install` to update the lockfile before publishing.

@@ -5,7 +5,7 @@ import {
   type ToolResult,
   type IntegrationProvider,
   type GatewayVersions,
-} from "@journal/gateway-protocol";
+} from "@journal.one/gateway-protocol";
 import { EventEmitter } from "node:events";
 import { Logger } from "./common/logger.js";
 import type { RuntimeConfig } from "./config.js";

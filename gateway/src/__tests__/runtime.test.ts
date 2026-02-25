@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Runtime } from "../runtime.js";
-import { IntegrationNotFoundError } from "@journal/gateway-protocol";
+import { IntegrationNotFoundError } from "@journal.one/gateway-protocol";
 import type { RuntimeConfig, McpServerConfig } from "../config.js";
 import { EventEmitter } from "node:events";
 

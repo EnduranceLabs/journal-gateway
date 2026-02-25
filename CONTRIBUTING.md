@@ -34,7 +34,7 @@ pip install -e ".[dev]" && pytest tests/
 ## Architecture
 
 ```
-protocol/                   # @journal/gateway-protocol (shared Zod schemas + TS types)
+protocol/                   # @journal.one/gateway-protocol (shared Zod schemas + TS types)
 gateway/                    # Gateway process (connects outbound to service)
   src/
     common/                 # Shared utilities (logger)
@@ -46,7 +46,7 @@ gateway/                    # Gateway process (connects outbound to service)
     config.ts               # Configuration parsing
     main.ts                 # CLI entry point
 clients/
-  typescript/               # @journal/gateway-client npm package
+  typescript/               # @journal.one/gateway-client npm package
   python/                   # journal-gateway-client PyPI package
 testing/
   integration/              # End-to-end tests (real gateway <-> client library)
@@ -67,10 +67,10 @@ Agents that want to accept gateway connections and call tools through them can u
 +-------------+        +------------------+        +-----------+
 ```
 
-### TypeScript (`@journal/gateway-client`)
+### TypeScript (`@journal.one/gateway-client`)
 
 ```typescript
-import { GatewayServer } from "@journal/gateway-client";
+import { GatewayServer } from "@journal.one/gateway-client";
 
 const server = new GatewayServer({
   port: 8080,

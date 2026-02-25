@@ -4,7 +4,7 @@ set -euo pipefail
 TAP_REPO="${TAP_REPO:-journal/homebrew-tap}"
 FORMULA="packaging/homebrew/journal-gateway.rb"
 VERSION="${VERSION:-$(node -p "require('./gateway/package.json').version")}"
-TARBALL_URL="https://registry.npmjs.org/@journal/gateway/-/gateway-${VERSION}.tgz"
+TARBALL_URL="https://registry.npmjs.org/@journal.one/gateway/-/gateway-${VERSION}.tgz"
 
 echo "Downloading tarball to compute sha256..."
 SHA256=$(curl -sL "${TARBALL_URL}" | shasum -a 256 | cut -d' ' -f1)

@@ -1,18 +1,27 @@
 {
-  "name": "@journal/gateway",
+  "name": "@journal.one/gateway",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/main.js",
+  "types": "./dist/main.d.ts",
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/main.d.ts",
+      "import": "./dist/main.js"
+    }
+  },
   "bin": {
     "journal-gateway": "./dist/main.js"
   },
+  "publishConfig": { "access": "public" },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@journal/gateway-protocol": "workspace:*",
+    "@journal.one/gateway-protocol": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12",
     "ws": "^8",
     "zod": "^3.24"
