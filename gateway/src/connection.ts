@@ -10,6 +10,8 @@ import {
 } from "@journal.one/gateway-protocol";
 import { Logger } from "./common/logger.js";
 import { VERSION } from "./version.js";
+import { Telemetry } from "./telemetry.js";
+import { AuditLogger } from "./audit.js";
 
 const PROTOCOL_VERSION = 2;
 const AUTH_TIMEOUT_MS = 10_000;
@@ -33,12 +35,18 @@ export class GatewayConnection {
   private closed = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private changeListener: (() => void) | null = null;
+  private telemetry: Telemetry | null;
+  private audit: AuditLogger | null;
 
   constructor(
     private config: GatewayConfig,
-    private provider: IntegrationProvider
+    private provider: IntegrationProvider,
+    telemetry?: Telemetry | null,
+    audit?: AuditLogger | null
   ) {
     this.logger = new Logger(config.logLevel);
+    this.telemetry = telemetry ?? null;
+    this.audit = audit ?? null;
   }
 
   async connect(): Promise<void> {
@@ -48,6 +56,7 @@ export class GatewayConnection {
 
   private async establishConnection(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
+      let settled = false;
       this.logger.info("Connecting to Journal service", {
         url: this.config.url,
       });
@@ -110,6 +119,7 @@ export class GatewayConnection {
             ready = true;
             this.reconnectDelay = RECONNECT_INITIAL_MS;
             this.logger.info("Gateway ready");
+            settled = true;
             resolve();
             break;
           }
@@ -119,8 +129,9 @@ export class GatewayConnection {
             this.logger.error("Authentication failed", {
               error: msg.error,
             });
-            ws.close();
+            settled = true;
             reject(new Error(`Authentication failed: ${msg.error}`));
+            ws.close();
             break;
           }
 
@@ -181,7 +192,10 @@ export class GatewayConnection {
         if (ready) {
           this.scheduleReconnect();
         } else {
-          reject(new Error("Connection closed before authentication completed"));
+          if (!settled) {
+            settled = true;
+            reject(new Error("Connection closed before authentication completed"));
+          }
           this.scheduleReconnect();
         }
       });
@@ -190,7 +204,10 @@ export class GatewayConnection {
         this.logger.error("WebSocket error", { error: err.message });
         if (!authenticated) {
           clearTimeout(authTimer);
-          reject(err);
+          if (!settled) {
+            settled = true;
+            reject(err);
+          }
         }
       });
     });
@@ -239,49 +256,94 @@ export class GatewayConnection {
       );
     });
 
-    try {
-      const result = await Promise.race([
-        this.provider.callTool(integrationId, toolName, args),
-        timeout,
-      ]);
+    await this.audit?.log({
+      type: "tool_call",
+      stage: "start",
+      integrationId,
+      toolName,
+      requestId,
+    });
 
-      this.send({ type: "tool_result", requestId, result });
+    const spanAttrs = {
+      integrationId,
+      toolName,
+      requestId,
+    };
 
-      this.logger.toolCall({
-        integrationId,
-        toolName,
-        requestId,
-        durationMs: Date.now() - start,
-        success: true,
-      });
-    } catch (err) {
-      let code: GatewayErrorCode = "EXECUTION_FAILED";
-      let message = err instanceof Error ? err.message : String(err);
+    const call = async () => {
+      try {
+        const result = await Promise.race([
+          this.provider.callTool(integrationId, toolName, args),
+          timeout,
+        ]);
 
-      if (err instanceof IntegrationNotFoundError) {
-        code = "INTEGRATION_NOT_FOUND";
-      } else if (err instanceof ToolTimeoutError) {
-        code = "TIMEOUT";
+        this.send({ type: "tool_result", requestId, result });
+
+        this.logger.toolCall({
+          integrationId,
+          toolName,
+          requestId,
+          durationMs: Date.now() - start,
+          success: true,
+        });
+        this.telemetry?.recordToolCall(Date.now() - start, true);
+        await this.audit?.log({
+          type: "tool_call",
+          stage: "result",
+          integrationId,
+          toolName,
+          requestId,
+          durationMs: Date.now() - start,
+          outcome: "success",
+        });
+      } catch (err) {
+        let code: GatewayErrorCode = "EXECUTION_FAILED";
+        let message = err instanceof Error ? err.message : String(err);
+
+        if (err instanceof IntegrationNotFoundError) {
+          code = "INTEGRATION_NOT_FOUND";
+        } else if (err instanceof ToolTimeoutError) {
+          code = "TIMEOUT";
+        }
+
+        this.send({
+          type: "tool_error",
+          requestId,
+          error: { code, message },
+        });
+
+        this.logger.toolCall({
+          integrationId,
+          toolName,
+          requestId,
+          durationMs: Date.now() - start,
+          success: false,
+          error: message,
+        });
+        this.telemetry?.recordToolCall(Date.now() - start, false, code);
+        await this.audit?.log({
+          type: "tool_call",
+          stage: "error",
+          integrationId,
+          toolName,
+          requestId,
+          durationMs: Date.now() - start,
+          outcome: code,
+          errorMessage: message,
+        });
+      } finally {
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+        }
       }
+    };
 
-      this.send({
-        type: "tool_error",
-        requestId,
-        error: { code, message },
+    if (this.telemetry) {
+      await this.telemetry.startActiveSpan("gateway.tool_call", spanAttrs, async (span) => {
+        await call();
       });
-
-      this.logger.toolCall({
-        integrationId,
-        toolName,
-        requestId,
-        durationMs: Date.now() - start,
-        success: false,
-        error: message,
-      });
-    } finally {
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-      }
+    } else {
+      await call();
     }
   }
 
@@ -315,6 +377,13 @@ export class GatewayConnection {
   private send(message: GatewayMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
+      this.audit?.log({
+        type: "message",
+        direction: "gateway_to_service",
+        messageType: message.type,
+        requestId: "requestId" in message ? (message as { requestId?: string }).requestId : undefined,
+        integrationId: "integrationId" in message ? (message as { integrationId?: string }).integrationId : undefined,
+      });
     }
   }
 

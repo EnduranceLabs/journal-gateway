@@ -19,6 +19,8 @@ import { SkillClient } from "./skill-client.js";
 import { computeVersionHash } from "./version-hash.js";
 import { ConfigWatcher } from "./config-watcher.js";
 import { EnvFile } from "./env-file.js";
+import { Telemetry } from "./telemetry.js";
+import { AuditLogger } from "./audit.js";
 
 export interface RuntimeEvents {
   versions_changed: [];
@@ -31,6 +33,8 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
   private mcpVersion: string | null = null;
   private skillsVersion: string | null = null;
   private changeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private telemetry: Telemetry | null = null;
+  private audit: AuditLogger | null = null;
 
   private configWatcher: ConfigWatcher;
   private envFile: EnvFile;
@@ -42,13 +46,16 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
   constructor(
     private config: RuntimeConfig,
     configFilePath?: string | null,
-    envFilePath?: string | null
+    envFilePath?: string | null,
+    private observers?: { telemetry?: Telemetry | null; audit?: AuditLogger | null }
   ) {
     super();
     this.logger = new Logger(config.logLevel);
     this.skillClient = new SkillClient(config.skillsDir);
     this.configWatcher = new ConfigWatcher(configFilePath ?? null);
     this.envFile = new EnvFile(envFilePath ?? null);
+    this.telemetry = observers?.telemetry ?? null;
+    this.audit = observers?.audit ?? null;
 
     // Build initial env and config file snapshot
     const envVars = this.envFile.load();
@@ -188,6 +195,11 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
     });
 
     await mcpClient.start();
+    await this.audit?.log({
+      type: "process",
+      action: "start",
+      integrationId: definition.id,
+    });
     this.processes.set(definition.id, mcpClient);
   }
 
@@ -196,6 +208,11 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
     if (client) {
       await client.stop();
       this.processes.delete(id);
+      await this.audit?.log({
+        type: "process",
+        action: "stop",
+        integrationId: id,
+      });
     }
   }
 
@@ -237,8 +254,19 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
       this.logger.warn("Failed to resolve config, keeping current state", {
         error: err instanceof Error ? err.message : String(err),
       });
+      await this.audit?.log({
+        type: "config",
+        source: newConfigFile ? "config_file" : "env_file",
+        status: "skipped",
+        reason: err instanceof Error ? err.message : String(err),
+      });
       return;
     }
+    await this.audit?.log({
+      type: "config",
+      source: newConfigFile ? "config_file" : "env_file",
+      status: "applied",
+    });
 
     // Warn if skillsDir changed
     if (configFile.skillsDir !== this.currentConfigFile.skillsDir) {
