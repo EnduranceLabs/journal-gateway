@@ -34,6 +34,8 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
 
 The gateway authenticates, announces its tools, and waits for requests from Journal. MCP servers are started on demand and their tools are made available automatically.
 
+The gateway watches the config file and `.env` file for changes at runtime — add, remove, or modify MCP servers without restarting.
+
 ## Transports
 
 MCP servers can connect via three transports:

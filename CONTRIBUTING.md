@@ -39,12 +39,14 @@ gateway/                    # Gateway process (connects outbound to service)
   src/
     common/                 # Shared utilities (logger)
     connection.ts           # WebSocket connection handling
-    runtime.ts              # MCP + skills runtime (IntegrationProvider)
+    runtime.ts              # MCP + skills runtime (IntegrationProvider) with config hot-reload
     mcp-client.ts           # MCP server transport wrapper (stdio, SSE, streamable-http)
     skill-client.ts         # Skill file loader + fs.watch change detection
+    config-watcher.ts       # Config file watcher (fs.watch + debounce)
+    env-file.ts             # .env file loader + watcher (dotenv)
     version-hash.ts         # Content-hash versioning for change detection
-    config.ts               # Configuration parsing
-    main.ts                 # CLI entry point
+    config.ts               # Configuration parsing + resolution helpers
+    main.ts                 # CLI entry point (.env auto-detection)
 clients/
   typescript/               # @journal.one/gateway-client npm package
   python/                   # journal-gateway-client PyPI package

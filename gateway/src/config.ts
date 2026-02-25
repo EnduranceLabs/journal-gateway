@@ -101,7 +101,10 @@ function parseCliConfigArg(argv: string[]): string | null {
   return argv[idx + 1];
 }
 
-function readConfigFile(path: string): GatewayConfigFile {
+/**
+ * Read and parse a config file from disk. Throws on read or JSON parse errors.
+ */
+export function readConfigFile(path: string): GatewayConfigFile {
   let raw: string;
   try {
     raw = readFileSync(path, "utf-8");
@@ -115,6 +118,73 @@ function readConfigFile(path: string): GatewayConfigFile {
     throw new Error(`Config file is not valid JSON: ${path}`);
   }
   return GatewayConfigFileSchema.parse(parsed);
+}
+
+/**
+ * Resolve a GatewayConfigFile against environment variables.
+ * Returns McpServerConfig[] with name defaults applied, and a Map of resolved env vars per server.
+ */
+export function resolveConfigFile(
+  configFile: GatewayConfigFile,
+  env: Record<string, string | undefined>
+): { mcpServers: McpServerConfig[]; mcpEnvVars: Map<string, Record<string, string>> } {
+  const mcpServers: McpServerConfig[] = [];
+  const mcpEnvVars = new Map<string, Record<string, string>>();
+
+  for (const server of configFile.mcpServers) {
+    const config: McpServerConfig = {
+      ...server,
+      name: server.name ?? server.id,
+    } as McpServerConfig;
+
+    const resolvedEnv: Record<string, string> = {};
+
+    if (config.transport === "stdio") {
+      for (const [hostVar, serverVar] of Object.entries(config.envVars)) {
+        const value = env[hostVar];
+        if (!value) {
+          throw new Error(
+            `MCP server "${config.id}" requires environment variable ${hostVar}`
+          );
+        }
+        resolvedEnv[serverVar as string] = value;
+      }
+    } else {
+      for (const [headerName, envVarName] of Object.entries(config.headers)) {
+        const value = env[envVarName];
+        if (!value) {
+          throw new Error(
+            `MCP server "${config.id}" requires environment variable ${envVarName} for header "${headerName}"`
+          );
+        }
+        resolvedEnv[headerName] = value;
+      }
+    }
+
+    mcpServers.push(config);
+    mcpEnvVars.set(config.id, resolvedEnv);
+  }
+
+  return { mcpServers, mcpEnvVars };
+}
+
+/**
+ * Resolve the config file path from CLI args and env vars.
+ * Returns null for inline JSON or when no config is specified.
+ */
+export function resolveConfigFilePath(
+  env: Record<string, string | undefined>,
+  argv: string[]
+): string | null {
+  const cliConfigPath = parseCliConfigArg(argv);
+  if (cliConfigPath) return cliConfigPath;
+
+  const envConfig = env.JOURNAL_GATEWAY_CONFIG ?? null;
+  if (envConfig && !envConfig.trimStart().startsWith("{")) {
+    return envConfig;
+  }
+
+  return null;
 }
 
 export function parseConfig(
@@ -162,45 +232,7 @@ export function parseConfig(
     );
   }
 
-  // Build McpServerConfig[] and resolve envVars / headers
-  const mcpServers: McpServerConfig[] = [];
-  const mcpEnvVars = new Map<string, Record<string, string>>();
-
-  for (const server of configFile.mcpServers) {
-    const config: McpServerConfig = {
-      ...server,
-      name: server.name ?? server.id,
-    } as McpServerConfig;
-
-    const resolvedEnv: Record<string, string> = {};
-
-    if (config.transport === "stdio") {
-      // Resolve envVars mapping: { hostVar: serverVar }
-      for (const [hostVar, serverVar] of Object.entries(config.envVars)) {
-        const value = env[hostVar];
-        if (!value) {
-          throw new Error(
-            `MCP server "${config.id}" requires environment variable ${hostVar}`
-          );
-        }
-        resolvedEnv[serverVar as string] = value;
-      }
-    } else {
-      // SSE / streamable-http: resolve headers mapping { headerName: envVarName }
-      for (const [headerName, envVarName] of Object.entries(config.headers)) {
-        const value = env[envVarName];
-        if (!value) {
-          throw new Error(
-            `MCP server "${config.id}" requires environment variable ${envVarName} for header "${headerName}"`
-          );
-        }
-        resolvedEnv[headerName] = value;
-      }
-    }
-
-    mcpServers.push(config);
-    mcpEnvVars.set(config.id, resolvedEnv);
-  }
+  const { mcpServers, mcpEnvVars } = resolveConfigFile(configFile, env);
 
   return { ...base, mcpServers, mcpEnvVars, skillsDir: configFile.skillsDir };
 }

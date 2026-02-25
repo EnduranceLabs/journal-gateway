@@ -21,15 +21,17 @@ pnpm typecheck   # TypeScript type checking
 ```
 gateway/
   src/
-    types/          # Zod schemas, TypeScript types, protocol definitions
-    common/         # Shared utilities (logger)
-    connection.ts   # WebSocket connection to Journal service
-    runtime.ts      # MCP + skills runtime (IntegrationProvider)
-    mcp-client.ts   # MCP server subprocess wrapper
-    skill-client.ts # Skill file loader
-    config.ts       # Configuration parsing
-    main.ts         # CLI entry point
-    __tests__/      # All tests
+    types/              # Zod schemas, TypeScript types, protocol definitions
+    common/             # Shared utilities (logger)
+    connection.ts       # WebSocket connection to Journal service
+    runtime.ts          # MCP + skills runtime (IntegrationProvider) with config hot-reload
+    mcp-client.ts       # MCP server subprocess wrapper
+    skill-client.ts     # Skill file loader
+    config-watcher.ts   # Config file watcher (fs.watch + debounce)
+    env-file.ts         # .env file loader + watcher (dotenv)
+    config.ts           # Configuration parsing + resolution helpers
+    main.ts             # CLI entry point (.env auto-detection)
+    __tests__/          # All tests
 ```
 
 ## Key Source Files
@@ -49,11 +51,13 @@ Protocol types defined with Zod schemas:
 - `connection.ts` — WebSocket connection to Journal service with reconnection
 - `common/logger.ts` — Structured JSON logger
 - `version.ts` — Package version loader
-- `config.ts` — `McpServerConfig` interface and `parseConfig` with Zod validation
+- `config.ts` — `McpServerConfig` interface, `parseConfig`, `readConfigFile`, `resolveConfigFile`, `resolveConfigFilePath` with Zod validation
+- `config-watcher.ts` — Watches config file with `fs.watch` + 500ms debounce, emits `config_changed`
+- `env-file.ts` — Loads and watches `.env` files using `dotenv.parse()`, emits `env_changed`
 - `mcp-client.ts` — Spawns MCP server subprocesses via `@modelcontextprotocol/sdk`
-- `runtime.ts` — `Runtime` implements `IntegrationProvider` (manages MCP clients + skills)
+- `runtime.ts` — `Runtime` implements `IntegrationProvider` (manages MCP clients + skills), supports hot-reload of config and env files
 - `skill-client.ts` — Loads raw Markdown files as skills
-- `main.ts` — CLI entry point
+- `main.ts` — CLI entry point with `.env` auto-detection (`--env-file`, `JOURNAL_GATEWAY_ENV_FILE`, or `.env` in cwd)
 
 ## Testing Patterns
 
