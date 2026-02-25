@@ -24,7 +24,7 @@ Connect your data sources to [Journal](https://journal.one). The gateway runs in
 ### npm
 
 ```bash
-npm install -g @journal/gateway
+npm install -g @journal.one/gateway
 
 JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
 ```

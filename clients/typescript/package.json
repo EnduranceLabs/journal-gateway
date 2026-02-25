@@ -1,21 +1,23 @@
 {
-  "name": "@journal/gateway-client",
+  "name": "@journal.one/gateway-client",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/server.js",
   "types": "./dist/server.d.ts",
+  "files": ["dist"],
   "exports": {
     ".": {
       "types": "./dist/server.d.ts",
       "import": "./dist/server.js"
     }
   },
+  "publishConfig": { "access": "public" },
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
   },
   "dependencies": {
-    "@journal/gateway-protocol": "workspace:*",
+    "@journal.one/gateway-protocol": "workspace:*",
     "ws": "^8",
     "zod": "^3.24"
   },

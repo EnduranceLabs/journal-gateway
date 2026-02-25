@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SkillSchema } from "@journal/gateway-protocol";
+import { SkillSchema } from "@journal.one/gateway-protocol";
 
 describe("SkillSchema", () => {
   it("parses a valid skill", () => {

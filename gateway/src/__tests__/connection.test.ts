@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GatewayConnection } from "../connection.js";
-import type { GatewayConfig, IntegrationProvider, RegistrationVersions, Skill } from "@journal/gateway-protocol";
+import type { GatewayConfig, IntegrationProvider, GatewayVersions, Skill } from "@journal.one/gateway-protocol";
 import { EventEmitter } from "node:events";
 
 // Mock ws
@@ -45,10 +45,10 @@ const config: GatewayConfig = {
 
 function createMockProvider(): IntegrationProvider & {
   _emitter: EventEmitter;
-  _versions: RegistrationVersions;
+  _versions: GatewayVersions;
 } {
   const emitter = new EventEmitter();
-  const versions: RegistrationVersions = {
+  const versions: GatewayVersions = {
     mcpVersion: "abcdef0123456789",
     skillsVersion: null,
   };

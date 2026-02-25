@@ -309,7 +309,7 @@ class GatewayServer:
                 await ws.close()
                 return
 
-            protocol_version = msg.get("protocolVersion", 1)
+            protocol_version = msg.get("protocolVersion", 0)
             gateway_version = msg.get("gatewayVersion", "unknown")
 
             result = await self._validate_token(msg["token"])
@@ -462,8 +462,6 @@ class GatewayServer:
         """Pull tools from a gateway and update its integrations."""
         data = await gw_conn.send_pull("get_tools", timeout=self._pull_timeout)
         integrations = data.get("integrations", [])
-        if isinstance(integrations, list) and integrations and isinstance(integrations[0], dict):
-            integrations = self._parse_integrations(integrations)
         # Keep skills, replace tool integrations
         skills_integrations = [i for i in gw_conn.info.integrations if i.id == "skills"]
         gw_conn.info.integrations = list(integrations) + skills_integrations
@@ -473,8 +471,6 @@ class GatewayServer:
         """Pull skills from a gateway and update its integrations."""
         data = await gw_conn.send_pull("get_skills", timeout=self._pull_timeout)
         skills = data.get("skills", [])
-        if isinstance(skills, list) and skills and isinstance(skills[0], dict):
-            skills = [Skill(id=s["id"], content=s["content"]) for s in skills]
         # Keep non-skills integrations, replace skills integration
         non_skills = [i for i in gw_conn.info.integrations if i.id != "skills"]
         if skills:

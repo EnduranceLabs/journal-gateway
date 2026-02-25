@@ -47,13 +47,6 @@ class ToolResult:
     is_error: bool = False
 
 
-@dataclass
-class ToolCall:
-    request_id: str
-    integration_id: str
-    tool_name: str
-    arguments: dict
-
 
 @dataclass
 class GatewayError:

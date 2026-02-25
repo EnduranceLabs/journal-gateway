@@ -4,8 +4,8 @@ import {
   type Skill,
   type ToolResult,
   type IntegrationProvider,
-  type RegistrationVersions,
-} from "@journal/gateway-protocol";
+  type GatewayVersions,
+} from "@journal.one/gateway-protocol";
 import { EventEmitter } from "node:events";
 import { Logger } from "./common/logger.js";
 import type { RuntimeConfig } from "./config.js";
@@ -73,7 +73,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
     });
   }
 
-  getVersions(): RegistrationVersions {
+  getVersions(): GatewayVersions {
     return {
       mcpVersion: this.mcpVersion,
       skillsVersion: this.skillsVersion,

@@ -10,7 +10,7 @@ importers:
 
   clients/typescript:
     dependencies:
-      '@journal/gateway-protocol':
+      '@journal.one/gateway-protocol':
         specifier: workspace:*
         version: link:../../protocol
       ws:
@@ -35,7 +35,7 @@ importers:
 
   gateway:
     dependencies:
-      '@journal/gateway-protocol':
+      '@journal.one/gateway-protocol':
         specifier: workspace:*
         version: link:../protocol
       '@modelcontextprotocol/sdk':
@@ -73,7 +73,7 @@ importers:
 
   testing/integration/ts:
     dependencies:
-      '@journal/gateway-client':
+      '@journal.one/gateway-client':
         specifier: workspace:*
         version: link:../../../clients/typescript
     devDependencies:
