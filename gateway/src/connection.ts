@@ -174,7 +174,14 @@ export class GatewayConnection {
       ws.on("close", () => {
         this.logger.warn("WebSocket disconnected");
         this.unsubscribeFromChanges();
-        if (!this.closed && ready) {
+        clearTimeout(authTimer);
+
+        if (this.closed) return;
+
+        if (ready) {
+          this.scheduleReconnect();
+        } else {
+          reject(new Error("Connection closed before authentication completed"));
           this.scheduleReconnect();
         }
       });
@@ -224,8 +231,9 @@ export class GatewayConnection {
   ): Promise<void> {
     const start = Date.now();
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const timeout = new Promise<never>((_, reject) => {
-      setTimeout(
+      timeoutId = setTimeout(
         () => reject(new ToolTimeoutError()),
         TOOL_CALL_TIMEOUT_MS
       );
@@ -270,6 +278,10 @@ export class GatewayConnection {
         success: false,
         error: message,
       });
+    } finally {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
     }
   }
 
