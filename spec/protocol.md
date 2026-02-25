@@ -40,6 +40,9 @@ Gateway                                  Service
   |--------- | register -------|---------->|
   |<-------- | registered -----|----------|
   |          |                  |           |
+  |--------- | registrations_ -|---------->|
+  |          | changed (push)  |           |
+  |          |                  |           |
   |          +------------------+           |
   |                                         |
 ```
@@ -49,6 +52,7 @@ Gateway                                  Service
 3. On success (`authenticated`), it sends a `register` message declaring all available integrations and their tools.
 4. The connection enters steady state: the service sends `tool_call` requests and `ping` heartbeats; the gateway responds with `tool_result`/`tool_error` and `pong`.
 5. At any time during steady state, the service may send `refresh_registrations` to request the gateway to re-send its integrations. The gateway responds with a standard `register` message. This allows the service to pick up tool/skill changes without a full reconnect.
+6. The gateway may also proactively push a `registrations_changed` message when it detects that its tools or skills have changed. This is fire-and-forget — no acknowledgement is expected. The service should treat it like a re-register: replace the stored integrations for that gateway.
 
 ## Message Reference
 
@@ -78,12 +82,14 @@ Sent immediately after the WebSocket connection opens.
 
 #### `register`
 
-Sent after successful authentication. Declares all available integrations. Each integration can carry tools, skills, or both.
+Sent after successful authentication. Declares all available integrations. Each integration can carry tools, skills, or both. Also sent in response to `refresh_registrations`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | `"register"` | yes | Message discriminator |
 | `integrations` | `Integration[]` | yes | Array of integration registrations |
+| `mcpVersion` | `string` | no | Content hash of MCP tool integrations (see [Versioning](#versioning)) |
+| `skillsVersion` | `string` | no | Content hash of skill integrations (see [Versioning](#versioning)) |
 
 ```json
 {
@@ -119,7 +125,9 @@ Sent after successful authentication. Declares all available integrations. Each 
         }
       ]
     }
-  ]
+  ],
+  "mcpVersion": "a1b2c3d4e5f67890",
+  "skillsVersion": "0987654321fedcba"
 }
 ```
 
@@ -176,6 +184,37 @@ Sent in response to a `ping`.
 
 ```json
 { "type": "pong" }
+```
+
+#### `registrations_changed`
+
+Proactively sent by the gateway when it detects that its tools or skills have changed at runtime (e.g., an MCP server restarted with different tools, or a skill file was added to disk). This is fire-and-forget — the service does not acknowledge it.
+
+The service should treat this the same as a re-register: replace the stored integrations for the gateway and notify any listeners. The `integrations` array is always the full current set, not a diff.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"registrations_changed"` | yes | Message discriminator |
+| `integrations` | `Integration[]` | yes | Full updated integration list |
+| `mcpVersion` | `string` | no | Content hash of MCP tool integrations (see [Versioning](#versioning)) |
+| `skillsVersion` | `string` | no | Content hash of skill integrations (see [Versioning](#versioning)) |
+
+```json
+{
+  "type": "registrations_changed",
+  "integrations": [
+    {
+      "id": "postgresql",
+      "name": "PostgreSQL",
+      "description": "Query PostgreSQL databases",
+      "tools": [
+        { "name": "query", "description": "Execute SQL", "inputSchema": {} },
+        { "name": "execute", "description": "Execute DDL", "inputSchema": {} }
+      ]
+    }
+  ],
+  "mcpVersion": "f0e1d2c3b4a59687"
+}
 ```
 
 ### Service -> Gateway
@@ -282,7 +321,7 @@ Requests the gateway to re-send its integrations. The gateway responds with a st
 
 ## Data Types
 
-The canonical definitions live in `gateway/src/types/` as Zod schemas. The tables below are a prose summary for implementors working in other languages.
+The canonical definitions live in `protocol/src/` as Zod schemas. The tables below are a prose summary for implementors working in other languages.
 
 ### Integration
 
@@ -379,6 +418,16 @@ Multiple `tool_call` messages may be in flight simultaneously. Each carries a un
 | `TOOL_NOT_FOUND` | The requested `toolName` does not exist on the integration |
 | `EXECUTION_FAILED` | Tool execution threw an error |
 | `TIMEOUT` | Tool execution exceeded the timeout |
+
+## Versioning
+
+The `register` and `registrations_changed` messages may include optional `mcpVersion` and `skillsVersion` fields. These are content hashes (first 16 hex characters of a SHA-256 digest) computed over the integrations for each subsystem using stable JSON serialization.
+
+- **`mcpVersion`** covers all MCP tool integrations. Changes when tools are added, removed, or modified.
+- **`skillsVersion`** covers the skills integration. Changes when skill files are added, removed, or edited.
+- Either field is omitted (or absent) when the corresponding subsystem has no integrations.
+
+Version hashes are **informational**. They let the service quickly determine which subsystem changed without diffing the full integrations array. The `integrations` array is always the source of truth. Same content produces the same hash across restarts — there are no false positives from gateway restarts alone.
 
 ## Security Invariants
 
