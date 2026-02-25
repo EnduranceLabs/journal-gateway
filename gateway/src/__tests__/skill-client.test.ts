@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SkillClient } from "../skill-client.js";
@@ -99,5 +99,80 @@ Follow these steps to review.`;
     const integrations = client.getIntegrations();
     expect(integrations).toHaveLength(1);
     expect(integrations[0].skills![0].id).toBe("actual-skill");
+  });
+});
+
+describe("SkillClient watching", () => {
+  it("emits skills_changed on .md file add", async () => {
+    const client = new SkillClient(tempDir);
+    await client.load();
+    client.startWatching();
+
+    const changedPromise = new Promise<void>((resolve) => {
+      client.on("skills_changed", resolve);
+    });
+
+    // Add a new .md file
+    await writeFile(join(tempDir, "new-skill.md"), "New skill content");
+
+    await changedPromise;
+    // After reload, the new skill should be available
+    const integrations = client.getIntegrations();
+    expect(integrations).toHaveLength(1);
+    expect(integrations[0].skills!.some((s) => s.id === "new-skill")).toBe(true);
+
+    client.stopWatching();
+  });
+
+  it("ignores non-.md file changes", async () => {
+    const client = new SkillClient(tempDir);
+    await client.load();
+    client.startWatching();
+
+    let changed = false;
+    client.on("skills_changed", () => { changed = true; });
+
+    // Add a non-.md file
+    await writeFile(join(tempDir, "notes.txt"), "not a skill");
+
+    // Wait longer than the debounce
+    await new Promise((r) => setTimeout(r, 700));
+    expect(changed).toBe(false);
+
+    client.stopWatching();
+  });
+
+  it("debounces rapid changes", async () => {
+    const client = new SkillClient(tempDir);
+    await client.load();
+    client.startWatching();
+
+    let emitCount = 0;
+    client.on("skills_changed", () => { emitCount++; });
+
+    // Rapid writes
+    await writeFile(join(tempDir, "a.md"), "A");
+    await writeFile(join(tempDir, "b.md"), "B");
+    await writeFile(join(tempDir, "c.md"), "C");
+
+    // Wait for debounce to settle
+    await new Promise((r) => setTimeout(r, 800));
+    expect(emitCount).toBe(1);
+
+    client.stopWatching();
+  });
+
+  it("stopWatching prevents further events", async () => {
+    const client = new SkillClient(tempDir);
+    await client.load();
+    client.startWatching();
+    client.stopWatching();
+
+    let changed = false;
+    client.on("skills_changed", () => { changed = true; });
+
+    await writeFile(join(tempDir, "late.md"), "Too late");
+    await new Promise((r) => setTimeout(r, 700));
+    expect(changed).toBe(false);
   });
 });

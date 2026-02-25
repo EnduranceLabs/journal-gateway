@@ -46,7 +46,7 @@ async def connect_and_auth(url: str, token: str) -> websockets.asyncio.client.Cl
     await ws.send(json.dumps({
         "type": "authenticate",
         "token": token,
-        "protocolVersion": 1,
+        "protocolVersion": 2,
         "gatewayVersion": "0.1.0-test",
     }))
     raw = await ws.recv()
@@ -58,15 +58,54 @@ async def connect_and_auth(url: str, token: str) -> websockets.asyncio.client.Cl
     return ws
 
 
-async def register(ws: websockets.asyncio.client.ClientConnection, integrations: list | None = None) -> None:
-    """Register integrations on a mock gateway."""
+async def send_version_changed(
+    ws: websockets.asyncio.client.ClientConnection,
+    integrations: list | None = None,
+    mcp_version: str | None = None,
+    skills_version: str | None = None,
+    skills: list | None = None,
+) -> None:
+    """Send version_changed and handle pull requests from the server."""
+    integ = integrations or []
+    mcp_v = mcp_version if mcp_version is not None else ("abc123" if integ else None)
+    skills_v = skills_version
+    sk = skills or []
+
     await ws.send(json.dumps({
-        "type": "register",
-        "integrations": integrations or [],
+        "type": "version_changed",
+        "mcpVersion": mcp_v,
+        "skillsVersion": skills_v,
     }))
-    raw = await ws.recv()
-    msg = json.loads(raw)
-    assert msg["type"] == "registered"
+
+    # Handle pull requests from the server
+    pulls_expected = (1 if mcp_v else 0) + (1 if skills_v else 0)
+    pulls_done = 0
+
+    while pulls_done < pulls_expected:
+        try:
+            raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
+        except asyncio.TimeoutError:
+            break
+        msg = json.loads(raw)
+        if msg["type"] == "get_tools":
+            await ws.send(json.dumps({
+                "type": "tools",
+                "requestId": msg["requestId"],
+                "integrations": integ,
+                "mcpVersion": mcp_v,
+            }))
+            pulls_done += 1
+        elif msg["type"] == "get_skills":
+            await ws.send(json.dumps({
+                "type": "skills",
+                "requestId": msg["requestId"],
+                "skills": sk,
+                "skillsVersion": skills_v,
+            }))
+            pulls_done += 1
+
+    # Give the server time to process (version_changed is fire-and-forget)
+    await asyncio.sleep(0.05)
 
 
 TEST_INTEGRATION = {
@@ -83,10 +122,10 @@ TEST_INTEGRATION = {
 @pytest.mark.asyncio
 async def test_accepts_valid_token(server: GatewayServer):
     ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws)
+    await send_version_changed(ws)
     assert len(server.connected_gateways) == 1
     assert server.connected_gateways[0].organization_id == "org_1"
-    assert server.connected_gateways[0].protocol_version == 1
+    assert server.connected_gateways[0].protocol_version == 2
     assert server.connected_gateways[0].gateway_version == "0.1.0-test"
     await ws.close()
 
@@ -100,7 +139,7 @@ async def test_rejects_invalid_token(server: GatewayServer):
 @pytest.mark.asyncio
 async def test_call_tool_returns_result(server: GatewayServer):
     ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws, [TEST_INTEGRATION])
+    await send_version_changed(ws, [TEST_INTEGRATION])
 
     async def handle_calls():
         async for raw in ws:
@@ -130,7 +169,7 @@ async def test_call_tool_returns_result(server: GatewayServer):
 @pytest.mark.asyncio
 async def test_call_tool_returns_error(server: GatewayServer):
     ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws, [TEST_INTEGRATION])
+    await send_version_changed(ws, [TEST_INTEGRATION])
 
     async def handle_calls():
         async for raw in ws:
@@ -166,7 +205,7 @@ async def test_disconnection_fires_callback(server: GatewayServer):
     server.on_gateway_disconnected = lambda gw: disconnected.append(gw)
 
     ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws)
+    await send_version_changed(ws)
     assert len(server.connected_gateways) == 1
 
     await ws.close()
@@ -178,7 +217,7 @@ async def test_disconnection_fires_callback(server: GatewayServer):
 @pytest.mark.asyncio
 async def test_concurrent_tool_calls(server: GatewayServer):
     ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws, [TEST_INTEGRATION])
+    await send_version_changed(ws, [TEST_INTEGRATION])
 
     async def handle_calls():
         async for raw in ws:
@@ -215,7 +254,7 @@ async def test_concurrent_tool_calls(server: GatewayServer):
 @pytest.mark.asyncio
 async def test_available_tools(server: GatewayServer):
     ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws, [TEST_INTEGRATION])
+    await send_version_changed(ws, [TEST_INTEGRATION])
 
     assert server.available_tools == [
         {"integrationId": "test-integration", "name": "echo", "description": "Echo tool"},
@@ -225,104 +264,48 @@ async def test_available_tools(server: GatewayServer):
 
 
 @pytest.mark.asyncio
-async def test_reregister_updates_integrations_without_losing_pending(server: GatewayServer):
+async def test_version_changed_triggers_auto_pull(server: GatewayServer):
+    connected: list[ConnectedGateway] = []
+    server.on_gateway_connected = lambda gw: connected.append(gw)
+
     ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws, [TEST_INTEGRATION])
+    await send_version_changed(ws, [TEST_INTEGRATION], mcp_version="v1")
 
-    # Start a tool call but don't resolve it yet
-    tool_call_msg = None
+    assert len(connected) == 1
+    assert len(connected[0].integrations) == 1
+    assert len(connected[0].integrations[0].tools) == 2
+    assert connected[0].mcp_version == "v1"
+    await ws.close()
 
-    async def capture_call():
-        nonlocal tool_call_msg
-        raw = await ws.recv()
-        msg = json.loads(raw)
-        if msg["type"] == "tool_call":
-            tool_call_msg = msg
 
-    call_future = asyncio.ensure_future(
-        server.call_tool("test-integration", "echo", {"hello": "world"})
-    )
-    await asyncio.sleep(0.05)
-    # Drain the tool_call message from the websocket
-    raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
-    tool_call_msg = json.loads(raw)
-    assert tool_call_msg["type"] == "tool_call"
+@pytest.mark.asyncio
+async def test_subsequent_version_changed_fires_updated(server: GatewayServer):
+    updated_gateways: list[ConnectedGateway] = []
+    server.on_gateway_updated = lambda gw: updated_gateways.append(gw)
 
-    # Re-register with updated integrations (new tool added)
-    updated = {
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await send_version_changed(ws, [TEST_INTEGRATION], mcp_version="v1")
+
+    # Send another version_changed with updated tools
+    updated_integration = {
         **TEST_INTEGRATION,
         "tools": TEST_INTEGRATION["tools"] + [
             {"name": "new_tool", "description": "New tool", "inputSchema": {}},
         ],
     }
-    await register(ws, [updated])
+    await send_version_changed(ws, [updated_integration], mcp_version="v2")
 
-    # The pending tool call should still be resolvable
-    await ws.send(json.dumps({
-        "type": "tool_result",
-        "requestId": tool_call_msg["requestId"],
-        "result": {
-            "content": [{"type": "text", "text": "resolved"}],
-        },
-    }))
-
-    result = await call_future
-    assert result.content[0].text == "resolved"
-
-    # Verify the integrations are updated
-    assert len(server.connected_gateways[0].integrations[0].tools) == 3
-
-
-@pytest.mark.asyncio
-async def test_on_gateway_updated_fires_on_reregister(server: GatewayServer):
-    connected_count = 0
-    updated_count = 0
-    updated_gateways: list[ConnectedGateway] = []
-
-    def on_connected(gw):
-        nonlocal connected_count
-        connected_count += 1
-
-    def on_updated(gw):
-        nonlocal updated_count
-        updated_count += 1
-        updated_gateways.append(gw)
-
-    server.on_gateway_connected = on_connected
-    server.on_gateway_updated = on_updated
-
-    ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws, [TEST_INTEGRATION])
-    assert connected_count == 1
-    assert updated_count == 0
-
-    # Re-register
-    await register(ws, [TEST_INTEGRATION])
-    assert connected_count == 1  # Should NOT increment
-    assert updated_count == 1
-    assert updated_gateways[0].id is not None
-    await ws.close()
-
-
-@pytest.mark.asyncio
-async def test_request_refresh_registrations(server: GatewayServer):
-    ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws, [TEST_INTEGRATION])
-
-    gateway_id = server.connected_gateways[0].id
-
-    await server.request_refresh_registrations(gateway_id)
-
-    raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
-    msg = json.loads(raw)
-    assert msg["type"] == "refresh_registrations"
+    assert len(updated_gateways) == 1
+    gw = server.connected_gateways[0]
+    assert len(gw.integrations[0].tools) == 3
+    assert gw.mcp_version == "v2"
     await ws.close()
 
 
 @pytest.mark.asyncio
 async def test_has_gateway_for_org(server: GatewayServer):
     ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws)
+    await send_version_changed(ws)
 
     assert server.has_gateway_for_org("org_1") is True
     assert server.has_gateway_for_org("org_nonexistent") is False
@@ -332,10 +315,10 @@ async def test_has_gateway_for_org(server: GatewayServer):
 @pytest.mark.asyncio
 async def test_get_gateways_for_org(server: GatewayServer):
     ws1 = await connect_and_auth(server.url, "gw_valid")
-    await register(ws1, [TEST_INTEGRATION])
+    await send_version_changed(ws1, [TEST_INTEGRATION])
 
     ws2 = await connect_and_auth(server.url, "gw_org2")
-    await register(ws2, [TEST_INTEGRATION])
+    await send_version_changed(ws2, [TEST_INTEGRATION])
 
     org1_gateways = server.get_gateways_for_org("org_1")
     assert len(org1_gateways) == 1
@@ -354,7 +337,7 @@ async def test_get_gateways_for_org(server: GatewayServer):
 @pytest.mark.asyncio
 async def test_get_tools_for_org(server: GatewayServer):
     ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws, [TEST_INTEGRATION])
+    await send_version_changed(ws, [TEST_INTEGRATION])
 
     tools = server.get_tools_for_org("org_1")
     assert len(tools) == 2
@@ -370,10 +353,10 @@ async def test_get_tools_for_org(server: GatewayServer):
 async def test_get_tools_for_org_deduplicates(server: GatewayServer):
     """Two gateways for the same org with the same integration should deduplicate tools."""
     ws1 = await connect_and_auth(server.url, "gw_valid")
-    await register(ws1, [TEST_INTEGRATION])
+    await send_version_changed(ws1, [TEST_INTEGRATION])
 
     ws2 = await connect_and_auth(server.url, "gw_valid")
-    await register(ws2, [TEST_INTEGRATION])
+    await send_version_changed(ws2, [TEST_INTEGRATION])
 
     tools = server.get_tools_for_org("org_1")
     assert len(tools) == 2  # deduplicated, not 4
@@ -384,7 +367,7 @@ async def test_get_tools_for_org_deduplicates(server: GatewayServer):
 @pytest.mark.asyncio
 async def test_call_tool_for_org(server: GatewayServer):
     ws = await connect_and_auth(server.url, "gw_valid")
-    await register(ws, [TEST_INTEGRATION])
+    await send_version_changed(ws, [TEST_INTEGRATION])
 
     async def handle_calls():
         async for raw in ws:
@@ -414,6 +397,28 @@ async def test_call_tool_for_org_no_match(server: GatewayServer):
 
 
 @pytest.mark.asyncio
+async def test_connected_gateway_has_version_fields(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await send_version_changed(ws, [TEST_INTEGRATION], mcp_version="abc123", skills_version="def456",
+                               skills=[{"id": "review", "content": "Review PR..."}])
+
+    gw = server.connected_gateways[0]
+    assert gw.mcp_version == "abc123"
+    assert gw.skills_version == "def456"
+    await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_connected_gateway_null_versions_by_default(server: GatewayServer):
+    ws = await connect_and_auth(server.url, "gw_valid")
+    await send_version_changed(ws)
+    gw = server.connected_gateways[0]
+    assert gw.mcp_version is None
+    assert gw.skills_version is None
+    await ws.close()
+
+
+@pytest.mark.asyncio
 async def test_pong_timeout_disconnects_gateway():
     """Gateway that doesn't respond to pings should be disconnected."""
     srv = GatewayServer(
@@ -432,16 +437,20 @@ async def test_pong_timeout_disconnects_gateway():
     await ws.send(json.dumps({
         "type": "authenticate",
         "token": "gw_valid",
-        "protocolVersion": 1,
+        "protocolVersion": 2,
         "gatewayVersion": "0.1.0-test",
     }))
     msg = json.loads(await ws.recv())
     assert msg["type"] == "authenticated"
 
-    await ws.send(json.dumps({"type": "register", "integrations": []}))
-    msg = json.loads(await ws.recv())
-    assert msg["type"] == "registered"
+    await ws.send(json.dumps({
+        "type": "version_changed",
+        "mcpVersion": None,
+        "skillsVersion": None,
+    }))
 
+    # Wait for the gateway to be registered
+    await asyncio.sleep(0.1)
     assert len(srv.connected_gateways) == 1
 
     # Wait for ping + pong timeout to fire

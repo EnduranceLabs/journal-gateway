@@ -40,8 +40,10 @@ class _GatewayConn:
         self.ws = ws
         self.info = info
         self.pending: dict[str, asyncio.Future[ToolResult]] = {}
+        self.pending_pulls: dict[str, asyncio.Future] = {}
         self.pong_received: asyncio.Event = asyncio.Event()
         self._next_id = 0
+        self._next_pull_id = 0
 
     async def call_tool(
         self,
@@ -72,6 +74,30 @@ class _GatewayConn:
             self.pending.pop(request_id, None)
             raise TimeoutError(f"Tool call timed out after {timeout}s")
 
+    async def send_pull(self, pull_type: str, timeout: float = 30.0) -> dict:
+        self._next_pull_id += 1
+        request_id = f"pull_{self._next_pull_id}"
+
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future = loop.create_future()
+        self.pending_pulls[request_id] = future
+
+        await self.ws.send(json.dumps({
+            "type": pull_type,
+            "requestId": request_id,
+        }))
+
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            self.pending_pulls.pop(request_id, None)
+            raise TimeoutError(f"Pull {pull_type} timed out after {timeout}s")
+
+    def resolve_pull(self, request_id: str, data: dict) -> None:
+        future = self.pending_pulls.pop(request_id, None)
+        if future and not future.done():
+            future.set_result(data)
+
     def resolve_result(self, request_id: str, result: ToolResult) -> None:
         future = self.pending.pop(request_id, None)
         if future and not future.done():
@@ -89,6 +115,10 @@ class _GatewayConn:
             if not future.done():
                 future.set_exception(RuntimeError(reason))
         self.pending.clear()
+        for future in self.pending_pulls.values():
+            if not future.done():
+                future.set_exception(RuntimeError(reason))
+        self.pending_pulls.clear()
 
 
 class GatewayServer:
@@ -101,12 +131,14 @@ class GatewayServer:
         port: int = 0,
         ping_interval: float = 30.0,
         pong_timeout: float = 10.0,
+        pull_timeout: float = 30.0,
     ):
         self._validate_token = validate_token
         self._host = host
         self._port = port
         self._ping_interval = ping_interval
         self._pong_timeout = pong_timeout
+        self._pull_timeout = pull_timeout
         self._server: websockets.asyncio.server.Server | None = None
         self._gateways: dict[str, _GatewayConn] = {}
         self._next_id = 0
@@ -242,17 +274,26 @@ class GatewayServer:
                     raise
         raise last_error  # type: ignore[misc]
 
-    async def request_refresh_registrations(self, gateway_id: str) -> None:
-        """Send refresh_registrations to a specific gateway."""
+    async def get_versions(self, gateway_id: str) -> dict:
+        """Pull current versions from a gateway."""
         gw = self._gateways.get(gateway_id)
-        if gw:
-            await gw.ws.send(json.dumps({"type": "refresh_registrations"}))
+        if not gw:
+            raise LookupError(f"Gateway '{gateway_id}' not found")
+        return await gw.send_pull("get_versions", timeout=self._pull_timeout)
 
-    async def request_refresh_registrations_for_org(self, organization_id: str) -> None:
-        """Send refresh_registrations to all gateways for an organization."""
-        for gw in self._gateways.values():
-            if gw.info.organization_id == organization_id:
-                await gw.ws.send(json.dumps({"type": "refresh_registrations"}))
+    async def get_tools(self, gateway_id: str) -> dict:
+        """Pull tools from a gateway."""
+        gw = self._gateways.get(gateway_id)
+        if not gw:
+            raise LookupError(f"Gateway '{gateway_id}' not found")
+        return await gw.send_pull("get_tools", timeout=self._pull_timeout)
+
+    async def get_skills(self, gateway_id: str) -> dict:
+        """Pull skills from a gateway."""
+        gw = self._gateways.get(gateway_id)
+        if not gw:
+            raise LookupError(f"Gateway '{gateway_id}' not found")
+        return await gw.send_pull("get_skills", timeout=self._pull_timeout)
 
     async def _handle_connection(self, ws: websockets.asyncio.server.ServerConnection) -> None:
         self._next_id += 1
@@ -288,42 +329,41 @@ class GatewayServer:
                 auth_resp["organizationName"] = result.organization_name
             await ws.send(json.dumps(auth_resp))
 
-            # Phase 2: Registration (30s timeout)
+            # Phase 2: Wait for version_changed (30s timeout)
             raw = await asyncio.wait_for(ws.recv(), timeout=30.0)
             msg = json.loads(raw)
 
-            if msg.get("type") != "register":
+            if msg.get("type") != "version_changed":
                 await ws.close()
                 return
 
-            integrations = self._parse_integrations(msg.get("integrations", []))
-            tool_count = sum(len(i.tools) for i in integrations)
-            skill_count = sum(len(i.skills) for i in integrations)
-
-            await ws.send(json.dumps({
-                "type": "registered",
-                "integrationCount": len(integrations),
-                "toolCount": tool_count,
-                "skillCount": skill_count,
-            }))
+            mcp_version = msg.get("mcpVersion")
+            skills_version = msg.get("skillsVersion")
 
             info = ConnectedGateway(
                 id=conn_id,
                 organization_id=result.organization_id,
                 protocol_version=protocol_version,
                 gateway_version=gateway_version,
-                integrations=integrations,
+                integrations=[],
+                mcp_version=mcp_version,
+                skills_version=skills_version,
             )
             gw_conn = _GatewayConn(ws, info)
             self._gateways[conn_id] = gw_conn
 
-            if self.on_gateway_connected:
-                self.on_gateway_connected(info)
-
-            # Phase 3: Steady state - handle incoming messages
+            # Phase 3: Steady state - start message loop first so pull
+            # responses can be processed, then auto-pull concurrently.
             ping_task = None
             if self._ping_interval > 0:
                 ping_task = asyncio.create_task(self._ping_loop(ws, conn_id))
+
+            async def do_initial_pull():
+                await self._auto_pull(gw_conn)
+                if self.on_gateway_connected:
+                    self.on_gateway_connected(info)
+
+            pull_task = asyncio.create_task(do_initial_pull())
 
             try:
                 async for raw in ws:
@@ -341,20 +381,55 @@ class GatewayServer:
                         gw_conn.resolve_error(msg["requestId"], error)
                     elif msg_type == "pong":
                         gw_conn.pong_received.set()
-                    elif msg_type == "register":
-                        integrations = self._parse_integrations(msg.get("integrations", []))
-                        tool_count = sum(len(i.tools) for i in integrations)
-                        skill_count = sum(len(i.skills) for i in integrations)
-                        await ws.send(json.dumps({
-                            "type": "registered",
-                            "integrationCount": len(integrations),
-                            "toolCount": tool_count,
-                            "skillCount": skill_count,
-                        }))
-                        gw_conn.info.integrations = integrations
-                        if self.on_gateway_updated:
-                            self.on_gateway_updated(gw_conn.info)
+                    elif msg_type == "version_changed":
+                        new_mcp = msg.get("mcpVersion")
+                        new_skills = msg.get("skillsVersion")
+                        mcp_changed = new_mcp != gw_conn.info.mcp_version
+                        skills_changed = new_skills != gw_conn.info.skills_version
+                        gw_conn.info.mcp_version = new_mcp
+                        gw_conn.info.skills_version = new_skills
+
+                        # Spawn pull as background task to avoid deadlock
+                        # (pull awaits futures resolved by this message loop)
+                        async def handle_version_update(mc=mcp_changed, sc=skills_changed,
+                                                        nm=new_mcp, ns=new_skills):
+                            if mc and nm is not None:
+                                await self._pull_tools(gw_conn)
+                            elif mc and nm is None:
+                                gw_conn.info.integrations = [
+                                    i for i in gw_conn.info.integrations if i.id == "skills"
+                                ]
+                            if sc and ns is not None:
+                                await self._pull_skills(gw_conn)
+                            elif sc and ns is None:
+                                gw_conn.info.integrations = [
+                                    i for i in gw_conn.info.integrations if i.id != "skills"
+                                ]
+                            if self.on_gateway_updated:
+                                self.on_gateway_updated(gw_conn.info)
+
+                        asyncio.create_task(handle_version_update())
+                    elif msg_type == "versions":
+                        gw_conn.resolve_pull(msg["requestId"], {
+                            "mcpVersion": msg.get("mcpVersion"),
+                            "skillsVersion": msg.get("skillsVersion"),
+                        })
+                    elif msg_type == "tools":
+                        gw_conn.resolve_pull(msg["requestId"], {
+                            "integrations": self._parse_integrations(msg.get("integrations", [])),
+                            "mcpVersion": msg.get("mcpVersion"),
+                        })
+                    elif msg_type == "skills":
+                        gw_conn.resolve_pull(msg["requestId"], {
+                            "skills": [
+                                Skill(id=s["id"], content=s["content"])
+                                for s in msg.get("skills", [])
+                            ],
+                            "skillsVersion": msg.get("skillsVersion"),
+                        })
+
             finally:
+                pull_task.cancel()
                 if ping_task:
                     ping_task.cancel()
                     try:
@@ -372,6 +447,46 @@ class GatewayServer:
                 self._gateways.pop(conn_id, None)
                 if self.on_gateway_disconnected:
                     self.on_gateway_disconnected(gw_conn.info)
+
+    async def _auto_pull(self, gw_conn: _GatewayConn) -> None:
+        """Pull tools and/or skills based on versions."""
+        tasks = []
+        if gw_conn.info.mcp_version is not None:
+            tasks.append(self._pull_tools(gw_conn))
+        if gw_conn.info.skills_version is not None:
+            tasks.append(self._pull_skills(gw_conn))
+        if tasks:
+            await asyncio.gather(*tasks)
+
+    async def _pull_tools(self, gw_conn: _GatewayConn) -> None:
+        """Pull tools from a gateway and update its integrations."""
+        data = await gw_conn.send_pull("get_tools", timeout=self._pull_timeout)
+        integrations = data.get("integrations", [])
+        if isinstance(integrations, list) and integrations and isinstance(integrations[0], dict):
+            integrations = self._parse_integrations(integrations)
+        # Keep skills, replace tool integrations
+        skills_integrations = [i for i in gw_conn.info.integrations if i.id == "skills"]
+        gw_conn.info.integrations = list(integrations) + skills_integrations
+        gw_conn.info.mcp_version = data.get("mcpVersion")
+
+    async def _pull_skills(self, gw_conn: _GatewayConn) -> None:
+        """Pull skills from a gateway and update its integrations."""
+        data = await gw_conn.send_pull("get_skills", timeout=self._pull_timeout)
+        skills = data.get("skills", [])
+        if isinstance(skills, list) and skills and isinstance(skills[0], dict):
+            skills = [Skill(id=s["id"], content=s["content"]) for s in skills]
+        # Keep non-skills integrations, replace skills integration
+        non_skills = [i for i in gw_conn.info.integrations if i.id != "skills"]
+        if skills:
+            non_skills.append(Integration(
+                id="skills",
+                name="Skills",
+                description="Gateway skills",
+                tools=[],
+                skills=list(skills),
+            ))
+        gw_conn.info.integrations = non_skills
+        gw_conn.info.skills_version = data.get("skillsVersion")
 
     async def _ping_loop(
         self, ws: websockets.asyncio.server.ServerConnection, conn_id: str

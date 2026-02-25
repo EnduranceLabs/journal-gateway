@@ -101,6 +101,26 @@ Each entry in `mcpServers`:
 
 Skills are instructions that teach Journal how to perform specific tasks in your environment. Place Markdown files in a directory and set `skillsDir` in the config file. Each `.md` file becomes a skill — the filename is used as the skill name.
 
+## Protocol
+
+The gateway communicates with Journal over a WebSocket using a simple JSON protocol (version 2). The full specification is in [spec/protocol.md](./spec/protocol.md); this section covers the key ideas.
+
+### Connection flow
+
+The gateway connects **outbound** to the Journal service — no inbound ports are needed. After authenticating with a token, it sends a **`version_changed`** message announcing its current version hashes. The connection is then ready — no registration handshake needed. The service decides when to fetch tools and skills by sending pull requests (`get_tools`, `get_skills`).
+
+### Change detection
+
+Tools and skills can change while the gateway is running. An MCP server might restart with different tools, or a skill file might be added to disk. The gateway detects these changes automatically and sends a lightweight **`version_changed`** message with updated version hashes. The service can then pull the specific data it needs.
+
+Version hashes (`mcpVersion` and `skillsVersion`) are content-based (SHA-256, 16 hex chars). Same content produces the same hash across restarts — the service can tell at a glance whether anything actually changed.
+
+### What clients should do
+
+Services using the client libraries (TypeScript or Python) receive `onGatewayConnected` after the initial pull completes (integrations are already populated). When the gateway sends `version_changed`, the client auto-pulls what changed and fires `onGatewayUpdated`.
+
+Services can also explicitly pull at any time using `getVersions()`, `getTools()`, or `getSkills()` on a specific gateway.
+
 ## License
 
 MIT

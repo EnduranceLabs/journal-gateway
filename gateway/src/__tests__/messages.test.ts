@@ -3,15 +3,20 @@ import {
   GatewayMessageSchema,
   ServiceMessageSchema,
   AuthenticateMessageSchema,
-  RegisterMessageSchema,
   ToolResultMessageSchema,
   ToolErrorMessageSchema,
   PongMessageSchema,
+  VersionChangedMessageSchema,
+  VersionsMessageSchema,
+  ToolsMessageSchema,
+  SkillsMessageSchema,
   AuthenticatedMessageSchema,
   AuthErrorMessageSchema,
-  RegisteredMessageSchema,
   ToolCallMessageSchema,
   PingMessageSchema,
+  GetVersionsMessageSchema,
+  GetToolsMessageSchema,
+  GetSkillsMessageSchema,
 } from "@journal/gateway-protocol";
 
 describe("Gateway → Service messages", () => {
@@ -19,15 +24,53 @@ describe("Gateway → Service messages", () => {
     const msg = {
       type: "authenticate",
       token: "gw_abc123",
-      protocolVersion: 1,
+      protocolVersion: 2,
       gatewayVersion: "0.1.0",
     };
     expect(AuthenticateMessageSchema.parse(msg)).toEqual(msg);
   });
 
-  it("parses register message", () => {
+  it("parses version_changed message", () => {
     const msg = {
-      type: "register",
+      type: "version_changed",
+      mcpVersion: "abcdef0123456789",
+      skillsVersion: null,
+    };
+    expect(VersionChangedMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses version_changed with both null versions", () => {
+    const msg = {
+      type: "version_changed",
+      mcpVersion: null,
+      skillsVersion: null,
+    };
+    expect(VersionChangedMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses version_changed with both versions", () => {
+    const msg = {
+      type: "version_changed",
+      mcpVersion: "abcdef0123456789",
+      skillsVersion: "9876543210fedcba",
+    };
+    expect(VersionChangedMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses versions response message", () => {
+    const msg = {
+      type: "versions",
+      requestId: "pull_1",
+      mcpVersion: "abcdef0123456789",
+      skillsVersion: null,
+    };
+    expect(VersionsMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses tools response message", () => {
+    const msg = {
+      type: "tools",
+      requestId: "pull_2",
       integrations: [
         {
           id: "postgresql",
@@ -42,29 +85,44 @@ describe("Gateway → Service messages", () => {
           ],
         },
       ],
+      mcpVersion: "abcdef0123456789",
     };
-    expect(RegisterMessageSchema.parse(msg)).toEqual(msg);
+    expect(ToolsMessageSchema.parse(msg)).toEqual(msg);
   });
 
-  it("parses register message with skills inside integration", () => {
+  it("parses tools response with empty integrations", () => {
     const msg = {
-      type: "register",
-      integrations: [
+      type: "tools",
+      requestId: "pull_3",
+      integrations: [],
+      mcpVersion: null,
+    };
+    expect(ToolsMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses skills response message", () => {
+    const msg = {
+      type: "skills",
+      requestId: "pull_4",
+      skills: [
         {
-          id: "skills",
-          name: "Skills",
-          description: "Loaded skills",
-          tools: [],
-          skills: [
-            {
-              id: "review-pr",
-              content: "You are reviewing a pull request. Follow these steps...",
-            },
-          ],
+          id: "review-pr",
+          content: "You are reviewing a pull request. Follow these steps...",
         },
       ],
+      skillsVersion: "9876543210fedcba",
     };
-    expect(RegisterMessageSchema.parse(msg)).toEqual(msg);
+    expect(SkillsMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses skills response with empty skills", () => {
+    const msg = {
+      type: "skills",
+      requestId: "pull_5",
+      skills: [],
+      skillsVersion: null,
+    };
+    expect(SkillsMessageSchema.parse(msg)).toEqual(msg);
   });
 
   it("parses tool_result message", () => {
@@ -112,12 +170,8 @@ describe("Gateway → Service messages", () => {
       {
         type: "authenticate",
         token: "gw_test",
-        protocolVersion: 1,
+        protocolVersion: 2,
         gatewayVersion: "0.1.0",
-      },
-      {
-        type: "register",
-        integrations: [],
       },
       {
         type: "tool_result",
@@ -130,6 +184,10 @@ describe("Gateway → Service messages", () => {
         error: { code: "TIMEOUT", message: "timed out" },
       },
       { type: "pong" },
+      { type: "version_changed", mcpVersion: null, skillsVersion: null },
+      { type: "versions", requestId: "p1", mcpVersion: null, skillsVersion: null },
+      { type: "tools", requestId: "p2", integrations: [], mcpVersion: null },
+      { type: "skills", requestId: "p3", skills: [], skillsVersion: null },
     ];
 
     for (const msg of messages) {
@@ -140,7 +198,7 @@ describe("Gateway → Service messages", () => {
   it("rejects authenticate with missing token", () => {
     const msg = {
       type: "authenticate",
-      protocolVersion: 1,
+      protocolVersion: 2,
       gatewayVersion: "0.1.0",
     };
     expect(() => AuthenticateMessageSchema.parse(msg)).toThrow();
@@ -182,25 +240,6 @@ describe("Service → Gateway messages", () => {
     expect(AuthErrorMessageSchema.parse(msg)).toEqual(msg);
   });
 
-  it("parses registered message", () => {
-    const msg = {
-      type: "registered",
-      integrationCount: 2,
-      toolCount: 5,
-    };
-    expect(RegisteredMessageSchema.parse(msg)).toEqual(msg);
-  });
-
-  it("parses registered message with skillCount", () => {
-    const msg = {
-      type: "registered",
-      integrationCount: 1,
-      toolCount: 3,
-      skillCount: 2,
-    };
-    expect(RegisteredMessageSchema.parse(msg)).toEqual(msg);
-  });
-
   it("parses tool_call message", () => {
     const msg = {
       type: "tool_call",
@@ -217,11 +256,25 @@ describe("Service → Gateway messages", () => {
     expect(PingMessageSchema.parse(msg)).toEqual(msg);
   });
 
+  it("parses get_versions message", () => {
+    const msg = { type: "get_versions", requestId: "pull_1" };
+    expect(GetVersionsMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses get_tools message", () => {
+    const msg = { type: "get_tools", requestId: "pull_2" };
+    expect(GetToolsMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("parses get_skills message", () => {
+    const msg = { type: "get_skills", requestId: "pull_3" };
+    expect(GetSkillsMessageSchema.parse(msg)).toEqual(msg);
+  });
+
   it("parses all service message types via discriminated union", () => {
     const messages = [
       { type: "authenticated", organizationId: "org_1" },
       { type: "auth_error", error: "bad token" },
-      { type: "registered", integrationCount: 1, toolCount: 3 },
       {
         type: "tool_call",
         requestId: "req_1",
@@ -230,6 +283,9 @@ describe("Service → Gateway messages", () => {
         arguments: {},
       },
       { type: "ping" },
+      { type: "get_versions", requestId: "p1" },
+      { type: "get_tools", requestId: "p2" },
+      { type: "get_skills", requestId: "p3" },
     ];
 
     for (const msg of messages) {

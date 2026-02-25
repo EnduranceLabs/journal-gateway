@@ -9,13 +9,20 @@ export type {
   GatewayError,
   GatewayErrorCode,
   GatewayMessage,
-  RefreshRegistrationsMessage,
+  VersionChangedMessage,
+  VersionsMessage,
+  ToolsMessage,
+  SkillsMessage,
+  RegistrationVersions,
   ServiceMessage,
 } from "@journal/gateway-protocol";
 
 export {
   GatewayMessageSchema,
-  RefreshRegistrationsMessageSchema,
+  VersionChangedMessageSchema,
+  VersionsMessageSchema,
+  ToolsMessageSchema,
+  SkillsMessageSchema,
   ServiceMessageSchema,
   IntegrationSchema,
   ToolResultSchema,

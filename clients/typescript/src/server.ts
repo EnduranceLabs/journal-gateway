@@ -1,5 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
-import type { Integration, ToolDefinition, ToolResult } from "./types.js";
+import type { Integration, ToolDefinition, ToolResult, Skill } from "./types.js";
 import { GatewayMessageSchema } from "./types.js";
 
 export interface TokenValidationResult {
@@ -11,6 +11,7 @@ export interface GatewayServerOptions {
   port?: number;
   validateToken: (token: string) => Promise<TokenValidationResult | null>;
   pingIntervalMs?: number;
+  pullTimeoutMs?: number;
 }
 
 export interface ConnectedGateway {
@@ -19,6 +20,8 @@ export interface ConnectedGateway {
   protocolVersion: number;
   gatewayVersion: string;
   integrations: Integration[];
+  mcpVersion: string | null;
+  skillsVersion: string | null;
 }
 
 interface PendingCall {
@@ -27,10 +30,17 @@ interface PendingCall {
   timer: ReturnType<typeof setTimeout>;
 }
 
+interface PendingPull {
+  resolve: (data: unknown) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 interface GatewayEntry {
   ws: WebSocket;
   gateway: ConnectedGateway;
   pending: Map<string, PendingCall>;
+  pendingPulls: Map<string, PendingPull>;
   pongTimer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -41,9 +51,12 @@ export class GatewayServer {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private connCounter = 0;
   private reqCounter = 0;
+  private pullCounter = 0;
+  private pullTimeoutMs: number;
 
   constructor(private options: GatewayServerOptions) {
     this._port = options.port ?? 0;
+    this.pullTimeoutMs = options.pullTimeoutMs ?? 30_000;
   }
 
   get port(): number {
@@ -116,6 +129,10 @@ export class GatewayServer {
       for (const pending of entry.pending.values()) {
         clearTimeout(pending.timer);
         pending.reject(new Error("Server shutting down"));
+      }
+      for (const pull of entry.pendingPulls.values()) {
+        clearTimeout(pull.timer);
+        pull.reject(new Error("Server shutting down"));
       }
       entry.ws.close();
     }
@@ -211,21 +228,22 @@ export class GatewayServer {
     return tools;
   }
 
-  /** Send refresh_registrations to a specific gateway. */
-  requestRefreshRegistrations(gatewayId: string): void {
-    const entry = this.gateways.get(gatewayId);
-    if (entry) {
-      entry.ws.send(JSON.stringify({ type: "refresh_registrations" }));
-    }
+  /** Pull current versions from a gateway. */
+  async getVersions(gatewayId: string): Promise<{ mcpVersion: string | null; skillsVersion: string | null }> {
+    const data = await this.sendPull(gatewayId, "get_versions");
+    return data as { mcpVersion: string | null; skillsVersion: string | null };
   }
 
-  /** Send refresh_registrations to all gateways for an organization. */
-  requestRefreshRegistrationsForOrg(organizationId: string): void {
-    for (const entry of this.gateways.values()) {
-      if (entry.gateway.organizationId === organizationId) {
-        entry.ws.send(JSON.stringify({ type: "refresh_registrations" }));
-      }
-    }
+  /** Pull tools from a gateway. */
+  async getTools(gatewayId: string): Promise<{ integrations: Integration[]; mcpVersion: string | null }> {
+    const data = await this.sendPull(gatewayId, "get_tools");
+    return data as { integrations: Integration[]; mcpVersion: string | null };
+  }
+
+  /** Pull skills from a gateway. */
+  async getSkills(gatewayId: string): Promise<{ skills: Skill[]; skillsVersion: string | null }> {
+    const data = await this.sendPull(gatewayId, "get_skills");
+    return data as { skills: Skill[]; skillsVersion: string | null };
   }
 
   /**
@@ -313,6 +331,98 @@ export class GatewayServer {
     });
   }
 
+  private sendPull(gatewayId: string, type: string): Promise<unknown> {
+    const entry = this.gateways.get(gatewayId);
+    if (!entry) {
+      return Promise.reject(new Error(`Gateway "${gatewayId}" not found`));
+    }
+
+    const requestId = `pull_${++this.pullCounter}`;
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        entry.pendingPulls.delete(requestId);
+        reject(new Error(`Pull ${type} timed out`));
+      }, this.pullTimeoutMs);
+
+      entry.pendingPulls.set(requestId, { resolve, reject, timer });
+
+      entry.ws.send(JSON.stringify({ type, requestId }));
+    });
+  }
+
+  private async autoPull(connId: string): Promise<void> {
+    const entry = this.gateways.get(connId);
+    if (!entry) return;
+
+    const pulls: Promise<void>[] = [];
+
+    if (entry.gateway.mcpVersion !== null) {
+      pulls.push(this.pullTools(connId));
+    }
+    if (entry.gateway.skillsVersion !== null) {
+      pulls.push(this.pullSkills(connId));
+    }
+
+    await Promise.all(pulls);
+  }
+
+  private async pullTools(connId: string): Promise<void> {
+    const entry = this.gateways.get(connId);
+    if (!entry) return;
+
+    const requestId = `pull_${++this.pullCounter}`;
+
+    const data = await new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        entry.pendingPulls.delete(requestId);
+        reject(new Error("Pull get_tools timed out"));
+      }, this.pullTimeoutMs);
+
+      entry.pendingPulls.set(requestId, { resolve, reject, timer });
+      entry.ws.send(JSON.stringify({ type: "get_tools", requestId }));
+    });
+
+    const typed = data as { integrations: Integration[]; mcpVersion: string | null };
+    entry.gateway.integrations = [
+      ...typed.integrations,
+      ...entry.gateway.integrations.filter((i) => i.id === "skills"),
+    ];
+    entry.gateway.mcpVersion = typed.mcpVersion;
+  }
+
+  private async pullSkills(connId: string): Promise<void> {
+    const entry = this.gateways.get(connId);
+    if (!entry) return;
+
+    const requestId = `pull_${++this.pullCounter}`;
+
+    const data = await new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        entry.pendingPulls.delete(requestId);
+        reject(new Error("Pull get_skills timed out"));
+      }, this.pullTimeoutMs);
+
+      entry.pendingPulls.set(requestId, { resolve, reject, timer });
+      entry.ws.send(JSON.stringify({ type: "get_skills", requestId }));
+    });
+
+    const typed = data as { skills: Skill[]; skillsVersion: string | null };
+    // Build skills integration if any skills exist
+    const nonSkillIntegrations = entry.gateway.integrations.filter((i) => i.id !== "skills");
+    if (typed.skills.length > 0) {
+      nonSkillIntegrations.push({
+        id: "skills",
+        name: "Skills",
+        description: "Gateway skills",
+        tools: [],
+        skills: typed.skills,
+      });
+    }
+    entry.gateway.integrations = nonSkillIntegrations;
+    entry.gateway.skillsVersion = typed.skillsVersion;
+  }
+
   private handleConnection(ws: WebSocket): void {
     const connId = `gw_${++this.connCounter}`;
     let authenticated = false;
@@ -365,51 +475,70 @@ export class GatewayServer {
           break;
         }
 
-        case "register": {
+        case "version_changed": {
           if (!authenticated) {
             ws.close();
             return;
           }
 
-          const integrations = msg.integrations;
-          let toolCount = 0;
-          let skillCount = 0;
-          for (const integration of integrations) {
-            toolCount += integration.tools.length;
-            skillCount += integration.skills?.length ?? 0;
-          }
-
-          ws.send(
-            JSON.stringify({
-              type: "registered",
-              integrationCount: integrations.length,
-              toolCount,
-              skillCount,
-            })
-          );
+          const mcpVersion = msg.mcpVersion;
+          const skillsVersion = msg.skillsVersion;
 
           const existing = this.gateways.get(connId);
           if (existing) {
-            // Re-register: update integrations in-place, preserve pending calls
-            existing.gateway.integrations = integrations;
+            // Subsequent version_changed: update versions and pull what changed
+            const mcpChanged = mcpVersion !== existing.gateway.mcpVersion;
+            const skillsChanged = skillsVersion !== existing.gateway.skillsVersion;
+
+            existing.gateway.mcpVersion = mcpVersion;
+            existing.gateway.skillsVersion = skillsVersion;
+
+            const pulls: Promise<void>[] = [];
+            if (mcpChanged && mcpVersion !== null) {
+              pulls.push(this.pullTools(connId));
+            } else if (mcpChanged && mcpVersion === null) {
+              // MCP removed: clear tool integrations
+              existing.gateway.integrations = existing.gateway.integrations.filter(
+                (i) => i.id === "skills"
+              );
+            }
+            if (skillsChanged && skillsVersion !== null) {
+              pulls.push(this.pullSkills(connId));
+            } else if (skillsChanged && skillsVersion === null) {
+              // Skills removed: clear skills integrations
+              existing.gateway.integrations = existing.gateway.integrations.filter(
+                (i) => i.id !== "skills"
+              );
+            }
+
+            if (pulls.length > 0) {
+              await Promise.all(pulls);
+            }
             this.onGatewayUpdated?.(existing.gateway);
           } else {
+            // First version_changed: create gateway entry, auto-pull, then fire connected
             const gateway: ConnectedGateway = {
               id: connId,
               organizationId,
               protocolVersion,
               gatewayVersion,
-              integrations,
+              integrations: [],
+              mcpVersion,
+              skillsVersion,
             };
 
             const entry: GatewayEntry = {
               ws,
               gateway,
               pending: new Map(),
+              pendingPulls: new Map(),
               pongTimer: null,
             };
 
             this.gateways.set(connId, entry);
+
+            // Auto-pull and then fire connected callback
+            await this.autoPull(connId);
             this.onGatewayConnected?.(gateway);
           }
           break;
@@ -451,6 +580,51 @@ export class GatewayServer {
           }
           break;
         }
+
+        case "versions": {
+          const entry = this.gateways.get(connId);
+          if (!entry) return;
+          const pull = entry.pendingPulls.get(msg.requestId);
+          if (pull) {
+            clearTimeout(pull.timer);
+            entry.pendingPulls.delete(msg.requestId);
+            pull.resolve({
+              mcpVersion: msg.mcpVersion,
+              skillsVersion: msg.skillsVersion,
+            });
+          }
+          break;
+        }
+
+        case "tools": {
+          const entry = this.gateways.get(connId);
+          if (!entry) return;
+          const pull = entry.pendingPulls.get(msg.requestId);
+          if (pull) {
+            clearTimeout(pull.timer);
+            entry.pendingPulls.delete(msg.requestId);
+            pull.resolve({
+              integrations: msg.integrations,
+              mcpVersion: msg.mcpVersion,
+            });
+          }
+          break;
+        }
+
+        case "skills": {
+          const entry = this.gateways.get(connId);
+          if (!entry) return;
+          const pull = entry.pendingPulls.get(msg.requestId);
+          if (pull) {
+            clearTimeout(pull.timer);
+            entry.pendingPulls.delete(msg.requestId);
+            pull.resolve({
+              skills: msg.skills,
+              skillsVersion: msg.skillsVersion,
+            });
+          }
+          break;
+        }
       }
     });
 
@@ -462,6 +636,10 @@ export class GatewayServer {
         for (const pending of entry.pending.values()) {
           clearTimeout(pending.timer);
           pending.reject(new Error("Gateway disconnected"));
+        }
+        for (const pull of entry.pendingPulls.values()) {
+          clearTimeout(pull.timer);
+          pull.reject(new Error("Gateway disconnected"));
         }
         this.gateways.delete(connId);
         this.onGatewayDisconnected?.(entry.gateway);

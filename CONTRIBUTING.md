@@ -34,14 +34,15 @@ pip install -e ".[dev]" && pytest tests/
 ## Architecture
 
 ```
+protocol/                   # @journal/gateway-protocol (shared Zod schemas + TS types)
 gateway/                    # Gateway process (connects outbound to service)
   src/
-    types/                  # Protocol types (Zod schemas)
     common/                 # Shared utilities (logger)
     connection.ts           # WebSocket connection handling
     runtime.ts              # MCP + skills runtime (IntegrationProvider)
     mcp-client.ts           # MCP server subprocess wrapper
-    skill-client.ts         # Skill file loader
+    skill-client.ts         # Skill file loader + fs.watch change detection
+    version-hash.ts         # Content-hash versioning for change detection
     config.ts               # Configuration parsing
     main.ts                 # CLI entry point
 clients/

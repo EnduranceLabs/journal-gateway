@@ -63,9 +63,16 @@ describe("Integration: TS client <-> real gateway", () => {
     await server.stop();
   });
 
-  it("gateway registers with zero tools (no MCP servers)", () => {
+  it("gateway connects with zero tools (no MCP servers)", () => {
     expect(server.connectedGateways).toHaveLength(1);
     expect(server.connectedGateways[0].integrations).toHaveLength(0);
+  });
+
+  it("connected gateway includes version fields (null when no MCP/skills configured)", () => {
+    const gw = server.connectedGateways[0];
+    // With no MCP servers or skills, both should be null
+    expect(gw.mcpVersion).toBeNull();
+    expect(gw.skillsVersion).toBeNull();
   });
 
   it("rejects gateway with invalid token", async () => {
@@ -79,19 +86,14 @@ describe("Integration: TS client <-> real gateway", () => {
     expect(server.connectedGateways).toHaveLength(1);
   });
 
-  it("service requests refresh, gateway re-registers with updated tools", async () => {
+  it("service can pull versions from gateway", async () => {
     const gatewayId = server.connectedGateways[0].id;
-
-    const updated = new Promise<void>((resolve) => {
-      server.onGatewayUpdated = () => resolve();
-    });
-
-    server.requestRefreshRegistrations(gatewayId);
-    await updated;
-
-    // Gateway re-registered (same integrations but the callback fired)
-    expect(server.connectedGateways).toHaveLength(1);
-    expect(server.connectedGateways[0].id).toBe(gatewayId);
+    const versions = await server.getVersions(gatewayId);
+    expect(versions).toHaveProperty("mcpVersion");
+    expect(versions).toHaveProperty("skillsVersion");
+    // No MCP servers configured, so mcpVersion should be null
+    expect(versions.mcpVersion).toBeNull();
+    expect(versions.skillsVersion).toBeNull();
   });
 
   it("detects gateway disconnect", async () => {

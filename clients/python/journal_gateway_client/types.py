@@ -68,3 +68,5 @@ class ConnectedGateway:
     protocol_version: int
     gateway_version: str
     integrations: list[Integration]
+    mcp_version: str | None = None
+    skills_version: str | None = None

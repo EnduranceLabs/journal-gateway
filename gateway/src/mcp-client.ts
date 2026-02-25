@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServerConfig } from "./config.js";
 import type { ToolDefinition, ToolResult, ContentBlock } from "@journal/gateway-protocol";
 import { Logger } from "./common/logger.js";
@@ -7,6 +8,7 @@ import { EventEmitter } from "node:events";
 
 export interface McpClientEvents {
   crash: [error: Error];
+  tools_changed: [];
 }
 
 export class McpClient extends EventEmitter<McpClientEvents> {
@@ -52,6 +54,16 @@ export class McpClient extends EventEmitter<McpClientEvents> {
 
     await this.client.connect(this.transport);
     this.running = true;
+
+    this.client.setNotificationHandler(
+      ToolListChangedNotificationSchema,
+      async () => {
+        this.logger.info(
+          `MCP server "${this.definition.id}" reported tools changed`
+        );
+        this.emit("tools_changed");
+      }
+    );
 
     this.logger.info(
       `MCP process for integration "${this.definition.id}" started successfully`
