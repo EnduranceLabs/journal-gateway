@@ -58,7 +58,7 @@ The gateway connects outbound to the Journal service over WebSocket. It manages 
 
 ## Client Libraries
 
-Agents that want to accept gateway connections and call tools through them can use the client libraries. They implement the **service side** of the protocol: run a WebSocket server, authenticate gateways, receive registrations, and provide a `callTool()` API.
+Agents that want to accept gateway connections and call tools through them can use the client libraries. They implement the **service side** of the protocol: run a WebSocket server, authenticate gateways, pull tools and skills, and provide a `callTool()` API.
 
 ```
 +-------------+        +------------------+        +-----------+
@@ -100,7 +100,7 @@ async def validate(token):
 server = GatewayServer(validate_token=validate, port=8080)
 await server.start()
 
-# Once a gateway connects and registers:
+# Once a gateway connects:
 result = await server.call_tool("my-integration", "query", {"sql": "SELECT 1"})
 print(result.content)
 

@@ -165,27 +165,7 @@ export class GatewayServer {
       throw new Error(`No gateway has integration "${integrationId}"`);
     }
 
-    const requestId = `req_${++this.reqCounter}`;
-    const entry = targetEntry;
-
-    return new Promise<ToolResult>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        entry.pending.delete(requestId);
-        reject(new Error(`Tool call timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      entry.pending.set(requestId, { resolve, reject, timer });
-
-      entry.ws.send(
-        JSON.stringify({
-          type: "tool_call",
-          requestId,
-          integrationId,
-          toolName,
-          arguments: args,
-        })
-      );
-    });
+    return this.callToolOnEntry(targetEntry, integrationId, toolName, args, timeoutMs);
   }
 
   /** Check if any gateway is connected for the given organization. */
@@ -351,6 +331,17 @@ export class GatewayServer {
     });
   }
 
+  private resolvePull(connId: string, requestId: string, data: unknown): void {
+    const entry = this.gateways.get(connId);
+    if (!entry) return;
+    const pull = entry.pendingPulls.get(requestId);
+    if (pull) {
+      clearTimeout(pull.timer);
+      entry.pendingPulls.delete(requestId);
+      pull.resolve(data);
+    }
+  }
+
   private async autoPull(connId: string): Promise<void> {
     const entry = this.gateways.get(connId);
     if (!entry) return;
@@ -371,56 +362,40 @@ export class GatewayServer {
     const entry = this.gateways.get(connId);
     if (!entry) return;
 
-    const requestId = `pull_${++this.pullCounter}`;
+    const data = await this.sendPull(connId, "get_tools") as {
+      integrations: Integration[];
+      mcpVersion: string | null;
+    };
 
-    const data = await new Promise<unknown>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        entry.pendingPulls.delete(requestId);
-        reject(new Error("Pull get_tools timed out"));
-      }, this.pullTimeoutMs);
-
-      entry.pendingPulls.set(requestId, { resolve, reject, timer });
-      entry.ws.send(JSON.stringify({ type: "get_tools", requestId }));
-    });
-
-    const typed = data as { integrations: Integration[]; mcpVersion: string | null };
     entry.gateway.integrations = [
-      ...typed.integrations,
+      ...data.integrations,
       ...entry.gateway.integrations.filter((i) => i.id === "skills"),
     ];
-    entry.gateway.mcpVersion = typed.mcpVersion;
+    entry.gateway.mcpVersion = data.mcpVersion;
   }
 
   private async pullSkills(connId: string): Promise<void> {
     const entry = this.gateways.get(connId);
     if (!entry) return;
 
-    const requestId = `pull_${++this.pullCounter}`;
+    const data = await this.sendPull(connId, "get_skills") as {
+      skills: Skill[];
+      skillsVersion: string | null;
+    };
 
-    const data = await new Promise<unknown>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        entry.pendingPulls.delete(requestId);
-        reject(new Error("Pull get_skills timed out"));
-      }, this.pullTimeoutMs);
-
-      entry.pendingPulls.set(requestId, { resolve, reject, timer });
-      entry.ws.send(JSON.stringify({ type: "get_skills", requestId }));
-    });
-
-    const typed = data as { skills: Skill[]; skillsVersion: string | null };
     // Build skills integration if any skills exist
     const nonSkillIntegrations = entry.gateway.integrations.filter((i) => i.id !== "skills");
-    if (typed.skills.length > 0) {
+    if (data.skills.length > 0) {
       nonSkillIntegrations.push({
         id: "skills",
         name: "Skills",
         description: "Gateway skills",
         tools: [],
-        skills: typed.skills,
+        skills: data.skills,
       });
     }
     entry.gateway.integrations = nonSkillIntegrations;
-    entry.gateway.skillsVersion = typed.skillsVersion;
+    entry.gateway.skillsVersion = data.skillsVersion;
   }
 
   private handleConnection(ws: WebSocket): void {
@@ -582,47 +557,26 @@ export class GatewayServer {
         }
 
         case "versions": {
-          const entry = this.gateways.get(connId);
-          if (!entry) return;
-          const pull = entry.pendingPulls.get(msg.requestId);
-          if (pull) {
-            clearTimeout(pull.timer);
-            entry.pendingPulls.delete(msg.requestId);
-            pull.resolve({
-              mcpVersion: msg.mcpVersion,
-              skillsVersion: msg.skillsVersion,
-            });
-          }
+          this.resolvePull(connId, msg.requestId, {
+            mcpVersion: msg.mcpVersion,
+            skillsVersion: msg.skillsVersion,
+          });
           break;
         }
 
         case "tools": {
-          const entry = this.gateways.get(connId);
-          if (!entry) return;
-          const pull = entry.pendingPulls.get(msg.requestId);
-          if (pull) {
-            clearTimeout(pull.timer);
-            entry.pendingPulls.delete(msg.requestId);
-            pull.resolve({
-              integrations: msg.integrations,
-              mcpVersion: msg.mcpVersion,
-            });
-          }
+          this.resolvePull(connId, msg.requestId, {
+            integrations: msg.integrations,
+            mcpVersion: msg.mcpVersion,
+          });
           break;
         }
 
         case "skills": {
-          const entry = this.gateways.get(connId);
-          if (!entry) return;
-          const pull = entry.pendingPulls.get(msg.requestId);
-          if (pull) {
-            clearTimeout(pull.timer);
-            entry.pendingPulls.delete(msg.requestId);
-            pull.resolve({
-              skills: msg.skills,
-              skillsVersion: msg.skillsVersion,
-            });
-          }
+          this.resolvePull(connId, msg.requestId, {
+            skills: msg.skills,
+            skillsVersion: msg.skillsVersion,
+          });
           break;
         }
       }

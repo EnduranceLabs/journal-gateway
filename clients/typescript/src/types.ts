@@ -13,7 +13,7 @@ export type {
   VersionsMessage,
   ToolsMessage,
   SkillsMessage,
-  RegistrationVersions,
+  GatewayVersions,
   ServiceMessage,
 } from "@journal/gateway-protocol";
 

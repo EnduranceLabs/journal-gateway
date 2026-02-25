@@ -46,6 +46,22 @@ function parseCliConfigArg(argv: string[]): string | null {
   return argv[idx + 1];
 }
 
+function readConfigFile(path: string): GatewayConfigFile {
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf-8");
+  } catch {
+    throw new Error(`Cannot read config file: ${path}`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`Config file is not valid JSON: ${path}`);
+  }
+  return GatewayConfigFileSchema.parse(parsed);
+}
+
 export function parseConfig(
   env: Record<string, string | undefined> = process.env,
   argv: string[] = process.argv
@@ -67,20 +83,7 @@ export function parseConfig(
   let configFile: GatewayConfigFile;
 
   if (cliConfigPath) {
-    // --config always treated as a file path
-    let raw: string;
-    try {
-      raw = readFileSync(cliConfigPath, "utf-8");
-    } catch (err) {
-      throw new Error(`Cannot read config file: ${cliConfigPath}`);
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      throw new Error(`Config file is not valid JSON: ${cliConfigPath}`);
-    }
-    configFile = GatewayConfigFileSchema.parse(parsed);
+    configFile = readConfigFile(cliConfigPath);
   } else if (envConfig) {
     if (envConfig.trimStart().startsWith("{")) {
       // Inline JSON
@@ -92,20 +95,7 @@ export function parseConfig(
       }
       configFile = GatewayConfigFileSchema.parse(parsed);
     } else {
-      // File path
-      let raw: string;
-      try {
-        raw = readFileSync(envConfig, "utf-8");
-      } catch (err) {
-        throw new Error(`Cannot read config file: ${envConfig}`);
-      }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        throw new Error(`Config file is not valid JSON: ${envConfig}`);
-      }
-      configFile = GatewayConfigFileSchema.parse(parsed);
+      configFile = readConfigFile(envConfig);
     }
   } else {
     configFile = GatewayConfigFileSchema.parse({});
@@ -133,14 +123,14 @@ export function parseConfig(
     };
 
     const resolvedEnv: Record<string, string> = {};
-    for (const [ourKey, childKey] of Object.entries(config.envVars)) {
-      const value = env[ourKey];
+    for (const [hostVar, serverVar] of Object.entries(config.envVars)) {
+      const value = env[hostVar];
       if (!value) {
         throw new Error(
-          `MCP server "${config.id}" requires environment variable ${ourKey}`
+          `MCP server "${config.id}" requires environment variable ${hostVar}`
         );
       }
-      resolvedEnv[childKey as string] = value;
+      resolvedEnv[serverVar as string] = value;
     }
 
     mcpServers.push(config);

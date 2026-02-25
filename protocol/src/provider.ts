@@ -1,7 +1,7 @@
 import type { Integration, ToolResult } from "./integrations.js";
 import type { Skill } from "./skills.js";
 
-export interface RegistrationVersions {
+export interface GatewayVersions {
   mcpVersion: string | null;
   skillsVersion: string | null;
 }
@@ -9,7 +9,7 @@ export interface RegistrationVersions {
 export interface IntegrationProvider {
   getTools(): Promise<Integration[]>;
   getSkills(): Skill[];
-  getVersions(): RegistrationVersions;
+  getVersions(): GatewayVersions;
   callTool(integrationId: string, toolName: string, args: Record<string, unknown>): Promise<ToolResult>;
   start(): Promise<void>;
   stop(): Promise<void>;

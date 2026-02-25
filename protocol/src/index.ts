@@ -60,5 +60,5 @@ export {
   type ServiceMessage,
 } from "./messages.js";
 
-export type { IntegrationProvider, GatewayConfig, RegistrationVersions } from "./provider.js";
+export type { IntegrationProvider, GatewayConfig, GatewayVersions } from "./provider.js";
 export { IntegrationNotFoundError } from "./provider.js";

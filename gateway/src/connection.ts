@@ -14,6 +14,13 @@ import { VERSION } from "./version.js";
 const PROTOCOL_VERSION = 2;
 const AUTH_TIMEOUT_MS = 10_000;
 const TOOL_CALL_TIMEOUT_MS = 60_000;
+
+class ToolTimeoutError extends Error {
+  constructor() {
+    super("Tool execution timed out");
+    this.name = "ToolTimeoutError";
+  }
+}
 const RECONNECT_INITIAL_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 const RECONNECT_MULTIPLIER = 2;
@@ -219,7 +226,7 @@ export class GatewayConnection {
 
     const timeout = new Promise<never>((_, reject) => {
       setTimeout(
-        () => reject(new Error("Tool execution timed out")),
+        () => reject(new ToolTimeoutError()),
         TOOL_CALL_TIMEOUT_MS
       );
     });
@@ -245,7 +252,7 @@ export class GatewayConnection {
 
       if (err instanceof IntegrationNotFoundError) {
         code = "INTEGRATION_NOT_FOUND";
-      } else if (message === "Tool execution timed out") {
+      } else if (err instanceof ToolTimeoutError) {
         code = "TIMEOUT";
       }
 
