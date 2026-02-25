@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { McpClient } from "../mcp-client.js";
 import { Logger } from "../common/logger.js";
-import type { McpServerConfig } from "../config.js";
+import type { McpServerConfig, StdioServerConfig, SseServerConfig, StreamableHttpServerConfig } from "../config.js";
 
 // Mock @modelcontextprotocol/sdk
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => {
@@ -35,14 +35,53 @@ vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => {
   };
 });
 
-const testDefinition: McpServerConfig = {
+vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => {
+  return {
+    SSEClientTransport: vi.fn().mockImplementation(() => ({
+      onclose: null,
+      close: vi.fn().mockResolvedValue(undefined),
+    })),
+  };
+});
+
+vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => {
+  return {
+    StreamableHTTPClientTransport: vi.fn().mockImplementation(() => ({
+      onclose: null,
+      close: vi.fn().mockResolvedValue(undefined),
+    })),
+  };
+});
+
+const testDefinition: StdioServerConfig = {
   id: "test-integration",
   type: "mcp_server",
+  transport: "stdio",
   name: "Test Integration",
   description: "A test integration",
   command: "echo",
   args: ["test"],
   envVars: {},
+};
+
+const sseDefinition: SseServerConfig = {
+  id: "sse-integration",
+  type: "mcp_server",
+  transport: "sse",
+  name: "SSE Integration",
+  description: "An SSE integration",
+  url: "https://mcp.example.com/sse",
+  headers: {},
+};
+
+const httpDefinition: StreamableHttpServerConfig = {
+  id: "http-integration",
+  type: "mcp_server",
+  transport: "streamable-http",
+  name: "HTTP Integration",
+  description: "A streamable HTTP integration",
+  url: "https://mcp.example.com/mcp",
+  headers: {},
 };
 
 const logger = new Logger("error");
@@ -52,7 +91,9 @@ describe("McpClient", () => {
     vi.clearAllMocks();
   });
 
-  it("starts and reports running", async () => {
+  // --- Stdio transport ---
+
+  it("starts and reports running (stdio)", async () => {
     const client = new McpClient(testDefinition, {}, logger);
     await client.start();
     expect(client.isRunning()).toBe(true);
@@ -124,7 +165,7 @@ describe("McpClient", () => {
     await changedPromise;
   });
 
-  it("emits crash event when transport closes unexpectedly", async () => {
+  it("emits crash event when transport closes unexpectedly (stdio)", async () => {
     const { StdioClientTransport } = await import(
       "@modelcontextprotocol/sdk/client/stdio.js"
     );
@@ -140,7 +181,89 @@ describe("McpClient", () => {
     mockTransport.onclose?.();
 
     const err = await crashPromise;
-    expect(err.message).toContain("exited unexpectedly");
+    expect(err.message).toContain("closed unexpectedly");
+    expect(client.isRunning()).toBe(false);
+  });
+
+  // --- SSE transport ---
+
+  it("starts and reports running (sse)", async () => {
+    const client = new McpClient(sseDefinition, {}, logger);
+    await client.start();
+    expect(client.isRunning()).toBe(true);
+  });
+
+  it("creates SSEClientTransport with url and headers", async () => {
+    const { SSEClientTransport } = await import(
+      "@modelcontextprotocol/sdk/client/sse.js"
+    );
+    const headers = { Authorization: "Bearer sk-123" };
+    const client = new McpClient(sseDefinition, headers, logger);
+    await client.start();
+
+    expect(vi.mocked(SSEClientTransport)).toHaveBeenCalledWith(
+      new URL("https://mcp.example.com/sse"),
+      { requestInit: { headers } }
+    );
+  });
+
+  it("emits crash event when SSE transport closes unexpectedly", async () => {
+    const { SSEClientTransport } = await import(
+      "@modelcontextprotocol/sdk/client/sse.js"
+    );
+    const client = new McpClient(sseDefinition, {}, logger);
+    await client.start();
+
+    const crashPromise = new Promise<Error>((resolve) => {
+      client.on("crash", resolve);
+    });
+
+    const mockTransport = vi.mocked(SSEClientTransport).mock.results[0].value;
+    mockTransport.onclose?.();
+
+    const err = await crashPromise;
+    expect(err.message).toContain("closed unexpectedly");
+    expect(client.isRunning()).toBe(false);
+  });
+
+  // --- Streamable HTTP transport ---
+
+  it("starts and reports running (streamable-http)", async () => {
+    const client = new McpClient(httpDefinition, {}, logger);
+    await client.start();
+    expect(client.isRunning()).toBe(true);
+  });
+
+  it("creates StreamableHTTPClientTransport with url and headers", async () => {
+    const { StreamableHTTPClientTransport } = await import(
+      "@modelcontextprotocol/sdk/client/streamableHttp.js"
+    );
+    const headers = { "X-Api-Key": "my-secret" };
+    const client = new McpClient(httpDefinition, headers, logger);
+    await client.start();
+
+    expect(vi.mocked(StreamableHTTPClientTransport)).toHaveBeenCalledWith(
+      new URL("https://mcp.example.com/mcp"),
+      { requestInit: { headers } }
+    );
+  });
+
+  it("emits crash event when streamable-http transport closes unexpectedly", async () => {
+    const { StreamableHTTPClientTransport } = await import(
+      "@modelcontextprotocol/sdk/client/streamableHttp.js"
+    );
+    const client = new McpClient(httpDefinition, {}, logger);
+    await client.start();
+
+    const crashPromise = new Promise<Error>((resolve) => {
+      client.on("crash", resolve);
+    });
+
+    const mockTransport = vi.mocked(StreamableHTTPClientTransport).mock.results[0].value;
+    mockTransport.onclose?.();
+
+    const err = await crashPromise;
+    expect(err.message).toContain("closed unexpectedly");
     expect(client.isRunning()).toBe(false);
   });
 });

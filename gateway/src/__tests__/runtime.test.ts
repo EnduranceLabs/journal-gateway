@@ -64,6 +64,7 @@ vi.mock("../skill-client.js", () => {
 const testIntegration: McpServerConfig = {
   id: "test-db",
   type: "mcp_server",
+  transport: "stdio",
   name: "Test DB",
   description: "A test database integration",
   command: "npx",

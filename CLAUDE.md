@@ -17,8 +17,12 @@ libraries for the service side. Keep it simple.
   IntegrationProvider with `getTools()` and `getSkills()`. Tracks content-hash
   versions (mcpVersion/skillsVersion) and emits `versions_changed` when tools or
   skills change at runtime.
-- `gateway/src/mcp-client.ts` — Spawns and manages individual MCP server subprocesses.
-  Listens for MCP `notifications/tools/list_changed` and emits `tools_changed`.
+- `gateway/src/mcp-client.ts` — Manages individual MCP server connections across three
+  transports: `stdio` (subprocess), `sse` (SSEClientTransport), and `streamable-http`
+  (StreamableHTTPClientTransport). Uses a `createTransport()` factory that switches on
+  the config's `transport` field. Listens for MCP `notifications/tools/list_changed`
+  and emits `tools_changed`. Crash handling (`onclose`) works identically for all
+  transports.
 - `gateway/src/skill-client.ts` — Loads skill files (raw Markdown) from a directory.
   Watches the skills directory with `fs.watch` and emits `skills_changed` on `.md`
   file changes. Exposes `getSkills()` for direct skill access and `getIntegrations()`
@@ -26,15 +30,27 @@ libraries for the service side. Keep it simple.
 - `gateway/src/version-hash.ts` — Computes stable content hashes (SHA-256, 16 hex chars)
   over integration arrays for change detection.
 - `gateway/src/config.ts` — Parses operational env vars and loads the gateway config file
-  (`--config` or `JOURNAL_GATEWAY_CONFIG`). Validates with Zod, resolves envVars mappings.
+  (`--config` or `JOURNAL_GATEWAY_CONFIG`). Validates with Zod using a discriminated union
+  on `transport` (`stdio`, `sse`, `streamable-http`). Resolves `envVars` for stdio and
+  `headers` (env var → header value) for HTTP transports. Backward compat: configs with
+  `command` but no `transport` field auto-get `transport: "stdio"`.
 - `gateway/src/main.ts` — CLI entry point.
 
 ## Gateway Config File
 All MCP servers and skills are configured via a single JSON config file with two top-level
 fields: `mcpServers` (array of server definitions) and `skillsDir` (path string).
 The config file is pointed to by `--config <path>` CLI arg or `JOURNAL_GATEWAY_CONFIG`
-env var (file path or inline JSON). Secrets stay in real env vars — the `envVars` mapping
-in each server definition resolves from the host environment at startup.
+env var (file path or inline JSON). Secrets stay in real env vars.
+
+Each server in `mcpServers` is a discriminated union on `transport`:
+- **`stdio`** (default): `command`, `args`, `envVars` — the `envVars` mapping resolves
+  host env vars to subprocess env vars at startup.
+- **`sse`**: `url`, `headers` — for legacy SSE-based MCP servers.
+- **`streamable-http`**: `url`, `headers` — the current MCP spec recommendation.
+
+For `sse`/`streamable-http`, the `headers` mapping resolves `{ headerName: envVarName }`
+from host env vars at startup. Configs without a `transport` field that have `command`
+are treated as `stdio` for backward compatibility.
 
 ## Client Libraries
 - `clients/typescript/` — `@journal.one/gateway-client` npm package. Implements the

@@ -1,6 +1,7 @@
 {
   "name": "@journal.one/gateway",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/main.js",
   "types": "./dist/main.d.ts",
