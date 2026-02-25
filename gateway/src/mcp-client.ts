@@ -5,7 +5,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { McpServerConfig } from "./config.js";
-import type { ToolDefinition, ToolResult, ContentBlock } from "@journal.one/gateway-protocol";
+import { ContentBlockSchema, type ToolDefinition, type ToolResult, type ContentBlock } from "@journal.one/gateway-protocol";
 import { Logger } from "./common/logger.js";
 import { VERSION } from "./version.js";
 import { EventEmitter } from "node:events";
@@ -113,17 +113,12 @@ export class McpClient extends EventEmitter<McpClientEvents> {
 
     const result = await this.client.callTool({ name, arguments: args });
 
-    const content: ContentBlock[] = (
-      result.content as Array<{ type: string; text?: string; data?: string; mimeType?: string }>
-    ).map((block) => {
-      if (block.type === "image") {
-        return {
-          type: "image" as const,
-          data: block.data ?? "",
-          mimeType: block.mimeType ?? "image/png",
-        };
-      }
-      return { type: "text" as const, text: block.text ?? "" };
+    const content: ContentBlock[] = (result.content as unknown[]).map((block) => {
+      const parsed = ContentBlockSchema.safeParse(block);
+      if (parsed.success) return parsed.data;
+      // Fall back to text for unrecognised content blocks
+      const raw = block as Record<string, unknown>;
+      return { type: "text" as const, text: String(raw.text ?? "") };
     });
 
     return {

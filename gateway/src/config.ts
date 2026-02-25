@@ -38,16 +38,14 @@ const McpServerConfigSchema = z.discriminatedUnion("transport", [
 // --- Exported types ---
 
 export type StdioServerConfig = z.infer<typeof StdioServerSchema> & {
-  type: "mcp_server";
   name: string;
 };
 export type SseServerConfig = z.infer<typeof SseServerSchema> & {
-  type: "mcp_server";
   name: string;
 };
 export type StreamableHttpServerConfig = z.infer<
   typeof StreamableHttpServerSchema
-> & { type: "mcp_server"; name: string };
+> & { name: string };
 
 export type McpServerConfig =
   | StdioServerConfig
@@ -171,7 +169,6 @@ export function parseConfig(
   for (const server of configFile.mcpServers) {
     const config: McpServerConfig = {
       ...server,
-      type: "mcp_server",
       name: server.name ?? server.id,
     } as McpServerConfig;
 

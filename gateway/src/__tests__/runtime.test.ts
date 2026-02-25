@@ -63,7 +63,6 @@ vi.mock("../skill-client.js", () => {
 
 const testIntegration: McpServerConfig = {
   id: "test-db",
-  type: "mcp_server",
   transport: "stdio",
   name: "Test DB",
   description: "A test database integration",
@@ -214,6 +213,32 @@ describe("Runtime", () => {
     // Wait for debounce
     await new Promise((r) => setTimeout(r, 700));
     expect(emitted).toBe(false);
+  });
+
+  it("routes tool calls to correct integration across multiple integrations", async () => {
+    const secondIntegration: McpServerConfig = {
+      id: "second-db",
+      transport: "stdio",
+      name: "Second DB",
+      description: "Another database",
+      command: "npx",
+      args: ["-y", "@test/mcp-db2"],
+      envVars: {},
+    };
+
+    const config = makeConfig([testIntegration, secondIntegration]);
+    const runtime = new Runtime(config);
+    await runtime.start();
+
+    const tools = await runtime.getTools();
+    expect(tools).toHaveLength(2);
+    expect(tools.map((t) => t.id)).toEqual(["test-db", "second-db"]);
+
+    // Both integrations should be callable
+    const result = await runtime.callTool("second-db", "query", { sql: "SELECT 2" });
+    expect(result.content[0]).toEqual({ type: "text", text: "result" });
+
+    await runtime.stop();
   });
 
   it("debounces rapid change events", async () => {

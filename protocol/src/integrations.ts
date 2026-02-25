@@ -14,6 +14,7 @@ export const IntegrationSchema = z.object({
   name: z.string(),
   description: z.string(),
   tools: z.array(ToolDefinitionSchema),
+  /** Present only on the synthesized "skills" integration built by the client library. */
   skills: z.array(SkillSchema).optional(),
 });
 
@@ -28,6 +29,7 @@ export type TextContent = z.infer<typeof TextContentSchema>;
 
 export const ImageContentSchema = z.object({
   type: z.literal("image"),
+  /** Base64-encoded image data. */
   data: z.string(),
   mimeType: z.string(),
 });

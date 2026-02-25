@@ -55,7 +55,6 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => {
 
 const testDefinition: StdioServerConfig = {
   id: "test-integration",
-  type: "mcp_server",
   transport: "stdio",
   name: "Test Integration",
   description: "A test integration",
@@ -66,7 +65,6 @@ const testDefinition: StdioServerConfig = {
 
 const sseDefinition: SseServerConfig = {
   id: "sse-integration",
-  type: "mcp_server",
   transport: "sse",
   name: "SSE Integration",
   description: "An SSE integration",
@@ -76,7 +74,6 @@ const sseDefinition: SseServerConfig = {
 
 const httpDefinition: StreamableHttpServerConfig = {
   id: "http-integration",
-  type: "mcp_server",
   transport: "streamable-http",
   name: "HTTP Integration",
   description: "A streamable HTTP integration",

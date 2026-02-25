@@ -386,6 +386,89 @@ describe("GatewayConnection", () => {
     await conn.close();
   });
 
+  it("reconnects after unexpected close", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    const connectPromise = conn.connect();
+
+    await new Promise((r) => setTimeout(r, 10));
+    const ws1 = mockWsInstances[0];
+
+    // Complete initial connection
+    ws1.emit("message", JSON.stringify({
+      type: "authenticated",
+      organizationId: "org_123",
+    }));
+    await connectPromise;
+
+    // Simulate unexpected disconnect
+    ws1.emit("close");
+
+    // Wait for reconnect attempt (initial delay ~1s, but we check a new WS is created)
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(mockWsInstances.length).toBeGreaterThanOrEqual(2);
+
+    await conn.close();
+  });
+
+  it("does not reconnect after explicit close", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    const connectPromise = conn.connect();
+
+    await new Promise((r) => setTimeout(r, 10));
+    const ws = mockWsInstances[0];
+
+    ws.emit("message", JSON.stringify({
+      type: "authenticated",
+      organizationId: "org_123",
+    }));
+    await connectPromise;
+
+    // Explicitly close, then wait
+    await conn.close();
+
+    const countBefore = mockWsInstances.length;
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(mockWsInstances.length).toBe(countBefore);
+  });
+
+  it("sends tool_error for unknown integration", async () => {
+    const provider = createMockProvider();
+    (provider.callTool as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new (await import("@journal.one/gateway-protocol")).IntegrationNotFoundError("unknown")
+    );
+
+    const conn = new GatewayConnection(config, provider);
+    const connectPromise = conn.connect();
+
+    await new Promise((r) => setTimeout(r, 10));
+    const ws = mockWsInstances[0];
+
+    ws.emit("message", JSON.stringify({
+      type: "authenticated",
+      organizationId: "org_123",
+    }));
+    await connectPromise;
+
+    ws.emit("message", JSON.stringify({
+      type: "tool_call",
+      requestId: "req_err",
+      integrationId: "unknown",
+      toolName: "query",
+      arguments: {},
+    }));
+
+    await new Promise((r) => setTimeout(r, 50));
+    const errorMsg = ws.sent.find((s) => JSON.parse(s).type === "tool_error");
+    expect(errorMsg).toBeDefined();
+    const parsed = JSON.parse(errorMsg!);
+    expect(parsed.requestId).toBe("req_err");
+    expect(parsed.error.code).toBe("INTEGRATION_NOT_FOUND");
+  });
+
   it("ignores invalid messages gracefully", async () => {
     const provider = createMockProvider();
     const conn = new GatewayConnection(config, provider);

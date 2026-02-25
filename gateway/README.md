@@ -44,7 +44,7 @@ MCP servers can connect via three transports:
 
 ## Full documentation
 
-See the [root README](https://github.com/journal-ai/journal-edge#readme) for the complete configuration reference, environment variables, protocol details, and Docker usage.
+See the [root README](https://github.com/EnduranceLabs/journal-edge#readme) for the complete configuration reference, environment variables, protocol details, and Docker usage.
 
 ## License
 
