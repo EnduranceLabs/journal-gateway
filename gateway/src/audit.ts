@@ -1,5 +1,4 @@
 import { appendFile } from "node:fs/promises";
-import { Telemetry } from "./telemetry.js";
 
 type AuditEvent =
   | {
@@ -34,6 +33,8 @@ type AuditEvent =
 interface AuditOptions {
   filePath?: string | null;
   enabled?: boolean;
+  maxBytes?: number | null;
+  maxFiles?: number | null;
 }
 
 /**

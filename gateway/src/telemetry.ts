@@ -1,4 +1,4 @@
-import { trace, metrics, context } from "@opentelemetry/api";
+import { trace, metrics, context, type AttributeValue } from "@opentelemetry/api";
 import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
@@ -19,7 +19,7 @@ export interface TelemetryOptions {
   disabled?: boolean;
 }
 
-type Attributes = Record<string, string | number | boolean | null | undefined>;
+type Attributes = Record<string, AttributeValue>;
 
 export class Telemetry {
   private tracerProvider: NodeTracerProvider | null = null;
@@ -31,9 +31,6 @@ export class Telemetry {
   private toolCallCounter: ReturnType<
     ReturnType<typeof metrics.getMeter>["createCounter"]
   > | null = null;
-  private toolCallCounter = metrics.getMeter("gateway").createCounter("gateway.tool_call.count", {
-    description: "Count of tool calls by outcome",
-  });
 
   async start(options: TelemetryOptions): Promise<void> {
     if (this.started) return;
@@ -82,24 +79,26 @@ export class Telemetry {
     fn: (span: import("@opentelemetry/api").Span) => Promise<T>
   ): Promise<T> {
     const tracer = trace.getTracer("gateway");
-    return tracer.startActiveSpan(
-      name,
-      { attributes: attrs },
-      context.active(),
-      async (span) => {
-        try {
-          const result = await fn(span);
-          span.setAttributes(attrs);
-          span.end();
-          return result;
-        } catch (err) {
-          span.recordException(err as Error);
-          span.setStatus({ code: 2 });
-          span.end();
-          throw err;
+    return new Promise<T>((resolve, reject) => {
+      tracer.startActiveSpan(
+        name,
+        { attributes: attrs },
+        context.active(),
+        async (span) => {
+          try {
+            const result = await fn(span);
+            span.setAttributes(attrs);
+            span.end();
+            resolve(result);
+          } catch (err) {
+            span.recordException(err as Error);
+            span.setStatus({ code: 2 });
+            span.end();
+            reject(err);
+          }
         }
-      }
-    );
+      );
+    });
   }
 
   recordToolCall(durationMs: number, success: boolean, code?: string): void {
