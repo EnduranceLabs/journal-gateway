@@ -156,6 +156,34 @@ Services using the client libraries (TypeScript or Python) receive `onGatewayCon
 
 Services can also explicitly pull at any time using `getVersions()`, `getTools()`, or `getSkills()` on a specific gateway.
 
+## Telemetry & Audit
+
+The gateway can emit OpenTelemetry traces and metrics to a customer-controlled OTLP/HTTP endpoint. It also records audit metadata for transparency: tool calls (integration, tool, request id, outcome, duration), outbound messages to Journal (message type and request id), config/env reloads, and MCP process start/stop. No secrets, tool arguments, or payload bodies are recorded.
+
+### Enabling telemetry
+
+Telemetry is off unless an OTLP endpoint is provided.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | — | OTLP/HTTP endpoint (e.g., `https://otel.example.com`) to enable traces/metrics |
+| `OTEL_SERVICE_NAME` | `journal-gateway` | Service name reported in telemetry |
+| `TELEMETRY_DISABLED` | `false` | Set to `true` to force-disable telemetry |
+| `AUDIT_LOG_FILE` | — | Path to a local JSONL audit file (metadata only) |
+| `AUDIT_MAX_BYTES` | — | Rotate audit file when it exceeds this size (bytes) |
+| `AUDIT_MAX_FILES` | — | Number of rotated audit files to keep |
+
+Example:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.example.com \
+OTEL_SERVICE_NAME=journal-gateway-prod \
+AUDIT_LOG_FILE=/var/log/journal-gateway-audit.log \
+JOURNAL_GATEWAY_TOKEN=gw_your_token \
+JOURNAL_GATEWAY_CONFIG=/etc/journal/gateway.json \
+journal-gateway --config /etc/journal/gateway.json
+```
+
 ## License
 
 MIT

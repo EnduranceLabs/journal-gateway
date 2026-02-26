@@ -7,6 +7,8 @@ import { EnvFile } from "./env-file.js";
 import { Runtime } from "./runtime.js";
 import { GatewayConnection } from "./connection.js";
 import { Logger } from "./common/logger.js";
+import { Telemetry } from "./telemetry.js";
+import { AuditLogger } from "./audit.js";
 
 function resolveEnvFilePath(
   env: Record<string, string | undefined>,
@@ -44,6 +46,20 @@ async function main(): Promise<void> {
   const config = parseConfig(mergedEnv, process.argv);
   const logger = new Logger(config.logLevel);
 
+  const telemetry = new Telemetry();
+  await telemetry.start({
+    endpoint: mergedEnv.OTEL_EXPORTER_OTLP_ENDPOINT,
+    serviceName: mergedEnv.OTEL_SERVICE_NAME ?? "journal-gateway",
+    disabled: (mergedEnv.TELEMETRY_DISABLED ?? "").toLowerCase() === "true",
+  });
+
+  const audit = new AuditLogger({
+    filePath: mergedEnv.AUDIT_LOG_FILE ?? null,
+    enabled: true,
+    maxBytes: mergedEnv.AUDIT_MAX_BYTES ? Number(mergedEnv.AUDIT_MAX_BYTES) : null,
+    maxFiles: mergedEnv.AUDIT_MAX_FILES ? Number(mergedEnv.AUDIT_MAX_FILES) : null,
+  });
+
   const configFilePath = resolveConfigFilePath(mergedEnv, process.argv);
 
   logger.info("Starting Journal Gateway", {
@@ -54,10 +70,13 @@ async function main(): Promise<void> {
     ...(envFilePath ? { envFile: envFilePath } : {}),
   });
 
-  const runtime = new Runtime(config, configFilePath, envFilePath);
+  const runtime = new Runtime(config, configFilePath, envFilePath, {
+    telemetry,
+    audit,
+  });
   await runtime.start();
 
-  const connection = new GatewayConnection(config, runtime);
+  const connection = new GatewayConnection(config, runtime, telemetry, audit);
   await connection.connect();
 
   logger.info("Journal Gateway is running");
@@ -66,6 +85,7 @@ async function main(): Promise<void> {
     logger.info(`Received ${signal}, shutting down`);
     await connection.close();
     await runtime.stop();
+    await telemetry.shutdown();
     process.exit(0);
   };
 
