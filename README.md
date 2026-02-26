@@ -158,15 +158,16 @@ Services can also explicitly pull at any time using `getVersions()`, `getTools()
 
 ## Telemetry & Audit
 
-The gateway can emit OpenTelemetry traces, metrics, and logs to a customer-controlled OTLP endpoint. It also records audit metadata for transparency: tool calls (integration, tool, request id, outcome, duration), outbound messages to Journal (message type and request id), config/env reloads, and MCP process start/stop. No secrets, tool arguments, or payload bodies are recorded.
+The gateway can emit OpenTelemetry traces and metrics to a customer-controlled OTLP/HTTP endpoint. It also records audit metadata for transparency: tool calls (integration, tool, request id, outcome, duration), outbound messages to Journal (message type and request id), config/env reloads, and MCP process start/stop. No secrets, tool arguments, or payload bodies are recorded.
 
 ### Enabling telemetry
 
+Telemetry is off unless an OTLP endpoint is provided.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | — | OTLP/HTTP endpoint (e.g., `https://otel.example.com`) to enable traces/metrics/logs |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | — | OTLP/HTTP endpoint (e.g., `https://otel.example.com`) to enable traces/metrics |
 | `OTEL_SERVICE_NAME` | `journal-gateway` | Service name reported in telemetry |
-| `TELEMETRY_ENABLED` | `false` | Set to `true` to enable telemetry when no OTLP endpoint is set |
 | `AUDIT_LOG_FILE` | — | Path to a local JSONL audit file (metadata only) |
 
 Example:

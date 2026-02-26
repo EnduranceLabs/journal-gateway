@@ -48,16 +48,12 @@ async function main(): Promise<void> {
 
   const telemetry = new Telemetry();
   await telemetry.start({
-    enabled:
-      (mergedEnv.TELEMETRY_ENABLED ?? "").toLowerCase() === "true" ||
-      Boolean(mergedEnv.OTEL_EXPORTER_OTLP_ENDPOINT),
     endpoint: mergedEnv.OTEL_EXPORTER_OTLP_ENDPOINT,
     serviceName: mergedEnv.OTEL_SERVICE_NAME ?? "journal-gateway",
   });
 
   const audit = new AuditLogger({
     filePath: mergedEnv.AUDIT_LOG_FILE ?? null,
-    telemetry,
     enabled: true,
   });
 

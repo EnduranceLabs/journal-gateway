@@ -33,7 +33,6 @@ type AuditEvent =
 
 interface AuditOptions {
   filePath?: string | null;
-  telemetry?: Telemetry | null;
   enabled?: boolean;
 }
 
@@ -42,12 +41,10 @@ interface AuditOptions {
  */
 export class AuditLogger {
   private filePath: string | null;
-  private telemetry: Telemetry | null;
   private enabled: boolean;
 
   constructor(options: AuditOptions = {}) {
     this.filePath = options.filePath ?? null;
-    this.telemetry = options.telemetry ?? null;
     this.enabled = options.enabled ?? true;
   }
 
@@ -62,10 +59,6 @@ export class AuditLogger {
     if (this.filePath) {
       const line = JSON.stringify(entry) + "\n";
       appendFile(this.filePath, line).catch(() => {});
-    }
-
-    if (this.telemetry) {
-      this.telemetry.log("audit", entry as Record<string, string | number | boolean | null | undefined>);
     }
   }
 }

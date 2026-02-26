@@ -1,23 +1,18 @@
-import {
-  diag,
-  DiagConsoleLogger,
-  DiagLogLevel,
-  trace,
-  metrics,
-  logs as otelLogs,
-  context,
-} from "@opentelemetry/api";
-import { NodeSDK } from "@opentelemetry/sdk-node";
+import { trace, metrics, context } from "@opentelemetry/api";
 import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
-import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
-import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
-import { BatchLogRecordProcessor, LoggerProvider } from "@opentelemetry/sdk-logs";
+import {
+  MeterProvider,
+  PeriodicExportingMetricReader,
+} from "@opentelemetry/sdk-metrics";
+import {
+  BatchSpanProcessor,
+  NodeTracerProvider,
+} from "@opentelemetry/sdk-trace-node";
 
 export interface TelemetryOptions {
-  enabled: boolean;
   endpoint?: string;
   serviceName?: string;
   resourceAttributes?: Record<string, string>;
@@ -25,56 +20,57 @@ export interface TelemetryOptions {
 
 type Attributes = Record<string, string | number | boolean | null | undefined>;
 
-/**
-  * Minimal OTEL bootstrapper for traces/metrics/logs.
-  * Defaults to OTLP/HTTP exporters and respects standard OTEL_* env overrides.
-  */
 export class Telemetry {
-  private sdk: NodeSDK | null = null;
+  private tracerProvider: NodeTracerProvider | null = null;
+  private meterProvider: MeterProvider | null = null;
   private started = false;
-  private toolCallHistogram = metrics.getMeter("gateway").createHistogram("gateway.tool_call.duration", {
-    description: "Tool call duration in milliseconds",
-    unit: "ms",
-  });
+  private toolCallHistogram: ReturnType<
+    ReturnType<typeof metrics.getMeter>["createHistogram"]
+  > | null = null;
+  private toolCallCounter: ReturnType<
+    ReturnType<typeof metrics.getMeter>["createCounter"]
+  > | null = null;
   private toolCallCounter = metrics.getMeter("gateway").createCounter("gateway.tool_call.count", {
     description: "Count of tool calls by outcome",
   });
-  private loggerProvider: LoggerProvider | null = null;
 
   async start(options: TelemetryOptions): Promise<void> {
-    if (this.started || !options.enabled) return;
-
-    diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.WARN);
+    if (this.started) return;
+    if (!options.endpoint) return;
 
     const resource = new Resource({
       [SemanticResourceAttributes.SERVICE_NAME]: options.serviceName ?? "journal-gateway",
       ...options.resourceAttributes,
     });
 
-    const traceExporter = new OTLPTraceExporter(options.endpoint ? { url: options.endpoint + "/v1/traces" } : undefined);
-    const metricExporter = new OTLPMetricExporter(options.endpoint ? { url: options.endpoint + "/v1/metrics" } : undefined);
-    const logExporter = new OTLPLogExporter(options.endpoint ? { url: options.endpoint + "/v1/logs" } : undefined);
+    const traceExporter = new OTLPTraceExporter({ url: options.endpoint + "/v1/traces" });
+    const metricExporter = new OTLPMetricExporter({ url: options.endpoint + "/v1/metrics" });
 
-    this.loggerProvider = new LoggerProvider({ resource });
-    this.loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporter));
-    otelLogs.setGlobalLoggerProvider(this.loggerProvider);
+    this.tracerProvider = new NodeTracerProvider({ resource });
+    this.tracerProvider.addSpanProcessor(new BatchSpanProcessor(traceExporter));
+    this.tracerProvider.register();
 
-    this.sdk = new NodeSDK({
-      resource,
-      traceExporter,
-      metricReader: new PeriodicExportingMetricReader({ exporter: metricExporter }),
-      logRecordProcessor: new BatchLogRecordProcessor(logExporter),
-      instrumentations: [],
+    this.meterProvider = new MeterProvider({ resource });
+    this.meterProvider.addMetricReader(
+      new PeriodicExportingMetricReader({ exporter: metricExporter })
+    );
+    metrics.setGlobalMeterProvider(this.meterProvider);
+
+    const meter = metrics.getMeter("gateway");
+    this.toolCallHistogram = meter.createHistogram("gateway.tool_call.duration", {
+      description: "Tool call duration in milliseconds",
+      unit: "ms",
     });
-
-    await this.sdk.start();
+    this.toolCallCounter = meter.createCounter("gateway.tool_call.count", {
+      description: "Count of tool calls by outcome",
+    });
     this.started = true;
   }
 
   async shutdown(): Promise<void> {
-    if (!this.started || !this.sdk) return;
-    await this.sdk.shutdown().catch(() => {});
-    this.loggerProvider?.shutdown().catch(() => {});
+    if (!this.started) return;
+    await this.tracerProvider?.shutdown().catch(() => {});
+    await this.meterProvider?.shutdown().catch(() => {});
     this.started = false;
   }
 
@@ -105,6 +101,7 @@ export class Telemetry {
   }
 
   recordToolCall(durationMs: number, success: boolean, code?: string): void {
+    if (!this.toolCallHistogram || !this.toolCallCounter) return;
     this.toolCallHistogram.record(durationMs, {
       success,
       ...(code ? { code } : {}),
@@ -115,11 +112,7 @@ export class Telemetry {
     });
   }
 
-  log(eventName: string, attributes: Attributes): void {
-    const logger = otelLogs.getLogger("gateway");
-    logger.emit({
-      body: eventName,
-      attributes,
-    });
+  isEnabled(): boolean {
+    return this.started;
   }
 }
