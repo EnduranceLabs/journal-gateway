@@ -168,7 +168,10 @@ Telemetry is off unless an OTLP endpoint is provided.
 |----------|---------|-------------|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | OTLP/HTTP endpoint (e.g., `https://otel.example.com`) to enable traces/metrics |
 | `OTEL_SERVICE_NAME` | `journal-gateway` | Service name reported in telemetry |
+| `TELEMETRY_DISABLED` | `false` | Set to `true` to force-disable telemetry |
 | `AUDIT_LOG_FILE` | — | Path to a local JSONL audit file (metadata only) |
+| `AUDIT_MAX_BYTES` | — | Rotate audit file when it exceeds this size (bytes) |
+| `AUDIT_MAX_FILES` | — | Number of rotated audit files to keep |
 
 Example:
 

@@ -16,6 +16,7 @@ export interface TelemetryOptions {
   endpoint?: string;
   serviceName?: string;
   resourceAttributes?: Record<string, string>;
+  disabled?: boolean;
 }
 
 type Attributes = Record<string, string | number | boolean | null | undefined>;
@@ -36,6 +37,7 @@ export class Telemetry {
 
   async start(options: TelemetryOptions): Promise<void> {
     if (this.started) return;
+    if (options.disabled) return;
     if (!options.endpoint) return;
 
     const resource = new Resource({

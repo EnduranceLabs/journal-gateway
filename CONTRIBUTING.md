@@ -118,7 +118,7 @@ The gateway communicates with Journal over WebSocket using a simple JSON protoco
 - Telemetry bootstrapper: `gateway/src/telemetry.ts` (minimal OTLP/HTTP exporters for traces and metrics; defaults to `service.name=journal-gateway`; no OTEL logs).
 - Audit logger: `gateway/src/audit.ts`, records metadata only (no arguments, results, or secrets). Events include tool call start/result/error, outbound message metadata, config/env reloads, and MCP process lifecycle.
 - Instrumentation hooks live in `gateway/src/connection.ts` (tool call spans/metrics + audit) and `gateway/src/runtime.ts` (config/env apply events, MCP start/stop). Keep additions metadata-only; use ids/hashes instead of payloads.
-- Env toggles: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `AUDIT_LOG_FILE`.
+- Env toggles: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `TELEMETRY_DISABLED`, `AUDIT_LOG_FILE`, `AUDIT_MAX_BYTES`, `AUDIT_MAX_FILES`.
 
 ## Packaging
 

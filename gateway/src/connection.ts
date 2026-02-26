@@ -37,6 +37,7 @@ export class GatewayConnection {
   private changeListener: (() => void) | null = null;
   private telemetry: Telemetry | null;
   private audit: AuditLogger | null;
+  private lastAuthFailed = false;
 
   constructor(
     private config: GatewayConfig,
@@ -59,6 +60,11 @@ export class GatewayConnection {
       let settled = false;
       this.logger.info("Connecting to Journal service", {
         url: this.config.url,
+      });
+      this.audit?.log({
+        type: "message",
+        direction: "gateway_to_service",
+        messageType: "connect",
       });
 
       const ws = new WebSocket(this.config.url);
@@ -103,6 +109,11 @@ export class GatewayConnection {
               organizationId: msg.organizationId,
               organizationName: msg.organizationName,
             });
+            this.audit?.log({
+              type: "message",
+              direction: "service_to_gateway",
+              messageType: "authenticated",
+            });
 
             // Send initial version_changed (fire-and-forget)
             const versions = this.provider.getVersions();
@@ -118,6 +129,7 @@ export class GatewayConnection {
             // Connection is ready
             ready = true;
             this.reconnectDelay = RECONNECT_INITIAL_MS;
+            this.lastAuthFailed = false;
             this.logger.info("Gateway ready");
             settled = true;
             resolve();
@@ -129,6 +141,12 @@ export class GatewayConnection {
             this.logger.error("Authentication failed", {
               error: msg.error,
             });
+            this.audit?.log({
+              type: "message",
+              direction: "service_to_gateway",
+              messageType: "auth_error",
+            });
+            this.lastAuthFailed = true;
             settled = true;
             reject(new Error(`Authentication failed: ${msg.error}`));
             ws.close();
@@ -136,6 +154,12 @@ export class GatewayConnection {
           }
 
           case "get_versions": {
+            this.audit?.log({
+              type: "message",
+              direction: "service_to_gateway",
+              messageType: "get_versions",
+              requestId: msg.requestId,
+            });
             const versions = this.provider.getVersions();
             this.send({
               type: "versions",
@@ -147,6 +171,12 @@ export class GatewayConnection {
           }
 
           case "get_tools": {
+            this.audit?.log({
+              type: "message",
+              direction: "service_to_gateway",
+              messageType: "get_tools",
+              requestId: msg.requestId,
+            });
             const tools = await this.provider.getTools();
             const versions = this.provider.getVersions();
             this.send({
@@ -159,6 +189,12 @@ export class GatewayConnection {
           }
 
           case "get_skills": {
+            this.audit?.log({
+              type: "message",
+              direction: "service_to_gateway",
+              messageType: "get_skills",
+              requestId: msg.requestId,
+            });
             const skills = this.provider.getSkills();
             const versions = this.provider.getVersions();
             this.send({
@@ -171,6 +207,13 @@ export class GatewayConnection {
           }
 
           case "tool_call": {
+            this.audit?.log({
+              type: "message",
+              direction: "service_to_gateway",
+              messageType: "tool_call",
+              requestId: msg.requestId,
+              integrationId: msg.integrationId,
+            });
             this.handleToolCall(msg.requestId, msg.integrationId, msg.toolName, msg.arguments);
             break;
           }
@@ -196,6 +239,7 @@ export class GatewayConnection {
             settled = true;
             reject(new Error("Connection closed before authentication completed"));
           }
+          // Keep retrying even after auth errors, but with backoff.
           this.scheduleReconnect();
         }
       });

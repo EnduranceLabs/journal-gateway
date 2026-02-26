@@ -50,11 +50,14 @@ async function main(): Promise<void> {
   await telemetry.start({
     endpoint: mergedEnv.OTEL_EXPORTER_OTLP_ENDPOINT,
     serviceName: mergedEnv.OTEL_SERVICE_NAME ?? "journal-gateway",
+    disabled: (mergedEnv.TELEMETRY_DISABLED ?? "").toLowerCase() === "true",
   });
 
   const audit = new AuditLogger({
     filePath: mergedEnv.AUDIT_LOG_FILE ?? null,
     enabled: true,
+    maxBytes: mergedEnv.AUDIT_MAX_BYTES ? Number(mergedEnv.AUDIT_MAX_BYTES) : null,
+    maxFiles: mergedEnv.AUDIT_MAX_FILES ? Number(mergedEnv.AUDIT_MAX_FILES) : null,
   });
 
   const configFilePath = resolveConfigFilePath(mergedEnv, process.argv);
