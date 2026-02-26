@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { createServer, type Server as HttpServer } from "node:http";
 import { GatewayServer, type ConnectedGateway } from "../src/server.js";
-import WebSocket from "ws";
+import WebSocket, { WebSocketServer } from "ws";
 
 function connectAndAuth(
   url: string,
@@ -373,6 +374,155 @@ describe("GatewayServer", () => {
 
     expect(server.connectedGateways[0].mcpVersion).toBe("abc123");
     expect(server.connectedGateways[0].skillsVersion).toBe("def456");
+    ws.close();
+  });
+});
+
+describe("GatewayServer (external server mode)", () => {
+  let gateway: GatewayServer;
+  let httpServer: HttpServer;
+  let wss: WebSocketServer;
+  let port: number;
+
+  beforeEach(async () => {
+    gateway = new GatewayServer({
+      validateToken: async (token) =>
+        token === "gw_valid"
+          ? { organizationId: "org_1", organizationName: "Test Org" }
+          : null,
+      pingIntervalMs: 0,
+    });
+
+    // Create an external HTTP + WS server and pipe connections to GatewayServer
+    httpServer = createServer();
+    wss = new WebSocketServer({ noServer: true });
+
+    httpServer.on("upgrade", (req, socket, head) => {
+      if (req.url === "/ws") {
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          gateway.handleConnection(ws);
+        });
+      } else {
+        socket.destroy();
+      }
+    });
+
+    await new Promise<void>((resolve) => {
+      httpServer.listen(0, () => {
+        const addr = httpServer.address();
+        port = typeof addr === "object" && addr !== null ? addr.port : 0;
+        resolve();
+      });
+    });
+  });
+
+  afterEach(async () => {
+    gateway.shutdown();
+    wss.close();
+    await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+  });
+
+  it("accepts connections via handleConnection", async () => {
+    const ws = await connectAndAuth(`ws://localhost:${port}/ws`, "gw_valid");
+    await sendVersionChanged(ws, [TEST_INTEGRATION]);
+
+    expect(gateway.connectedGateways).toHaveLength(1);
+    expect(gateway.connectedGateways[0].organizationId).toBe("org_1");
+    ws.close();
+  });
+
+  it("rejects invalid token via handleConnection", async () => {
+    await expect(
+      connectAndAuth(`ws://localhost:${port}/ws`, "gw_bad")
+    ).rejects.toThrow("Auth failed");
+  });
+
+  it("tool calls work via handleConnection", async () => {
+    const ws = await connectAndAuth(`ws://localhost:${port}/ws`, "gw_valid");
+    await sendVersionChanged(ws, [TEST_INTEGRATION]);
+
+    ws.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "tool_call") {
+        ws.send(
+          JSON.stringify({
+            type: "tool_result",
+            requestId: msg.requestId,
+            result: {
+              content: [{ type: "text", text: `got: ${msg.arguments.x}` }],
+            },
+          })
+        );
+      }
+    });
+
+    const result = await gateway.callToolForOrg(
+      "org_1",
+      "test-integration",
+      "echo",
+      { x: 42 }
+    );
+    expect(result.content[0]).toEqual({ type: "text", text: "got: 42" });
+    ws.close();
+  });
+
+  it("shutdown cleans up connections without closing external server", async () => {
+    let disconnected = false;
+    gateway.onGatewayDisconnected = () => { disconnected = true; };
+
+    const ws = await connectAndAuth(`ws://localhost:${port}/ws`, "gw_valid");
+    await sendVersionChanged(ws, []);
+    expect(gateway.connectedGateways).toHaveLength(1);
+
+    gateway.shutdown();
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(gateway.connectedGateways).toHaveLength(0);
+    expect(disconnected).toBe(true);
+
+    // HTTP server is still running — can accept new connections
+    const ws2 = await connectAndAuth(`ws://localhost:${port}/ws`, "gw_valid");
+    await sendVersionChanged(ws2, []);
+    expect(gateway.connectedGateways).toHaveLength(1);
+    ws2.close();
+  });
+
+  it("startHeartbeat sends pings", async () => {
+    // Recreate with heartbeat enabled
+    gateway.shutdown();
+    gateway = new GatewayServer({
+      validateToken: async (token) =>
+        token === "gw_valid" ? { organizationId: "org_1" } : null,
+      pingIntervalMs: 100,
+    });
+    gateway.startHeartbeat();
+
+    // Re-wire the upgrade handler to the new gateway instance
+    httpServer.removeAllListeners("upgrade");
+    httpServer.on("upgrade", (req, socket, head) => {
+      if (req.url === "/ws") {
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          gateway.handleConnection(ws);
+        });
+      } else {
+        socket.destroy();
+      }
+    });
+
+    const ws = await connectAndAuth(`ws://localhost:${port}/ws`, "gw_valid");
+    await sendVersionChanged(ws, []);
+
+    const pings: number[] = [];
+    ws.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "ping") {
+        pings.push(Date.now());
+        ws.send(JSON.stringify({ type: "pong" }));
+      }
+    });
+
+    await new Promise((r) => setTimeout(r, 350));
+    expect(pings.length).toBeGreaterThanOrEqual(2);
     ws.close();
   });
 });
