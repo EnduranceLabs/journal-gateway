@@ -38,9 +38,9 @@ protocol/                   # @journal.one/gateway-protocol (shared Zod schemas 
 gateway/                    # Gateway process (connects outbound to service)
   src/
     common/                 # Shared utilities (logger)
-    connection.ts           # WebSocket connection handling
-    runtime.ts              # MCP + skills runtime (IntegrationProvider) with config hot-reload
-    mcp-client.ts           # MCP server transport wrapper (stdio, SSE, streamable-http)
+    connection.ts           # WebSocket connection (single async reconnect loop, defensive handler)
+    runtime.ts              # MCP + skills runtime (IntegrationProvider, sync getTools) with config hot-reload
+    mcp-client.ts           # MCP server transport wrapper (stdio, SSE, streamable-http) with cache-first tools
     skill-client.ts         # Skill file loader + fs.watch change detection
     config-watcher.ts       # Config file watcher (fs.watch + debounce)
     env-file.ts             # .env file loader + watcher (dotenv)

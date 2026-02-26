@@ -96,10 +96,15 @@ describe("McpClient", () => {
     expect(client.isRunning()).toBe(true);
   });
 
-  it("lists tools from MCP server", async () => {
+  it("getTools returns empty before start", () => {
+    const client = new McpClient(testDefinition, {}, logger);
+    expect(client.getTools()).toEqual([]);
+  });
+
+  it("getTools returns cached tools after start", async () => {
     const client = new McpClient(testDefinition, {}, logger);
     await client.start();
-    const tools = await client.listTools();
+    const tools = client.getTools();
     expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe("query");
     expect(tools[0].description).toBe("Execute SQL");
@@ -130,11 +135,9 @@ describe("McpClient", () => {
     );
   });
 
-  it("throws when listing tools before start", async () => {
+  it("getTools returns empty when not started", () => {
     const client = new McpClient(testDefinition, {}, logger);
-    await expect(client.listTools()).rejects.toThrow(
-      "MCP process not started"
-    );
+    expect(client.getTools()).toEqual([]);
   });
 
   it("exposes integrationId from definition", () => {
@@ -142,32 +145,76 @@ describe("McpClient", () => {
     expect(client.integrationId).toBe("test-integration");
   });
 
-  it("emits tools_changed on MCP notifications/tools/list_changed", async () => {
+  it("refreshes cache and emits tools_changed on MCP notifications/tools/list_changed", async () => {
     const { Client } = await import(
       "@modelcontextprotocol/sdk/client/index.js"
     );
     const client = new McpClient(testDefinition, {}, logger);
     await client.start();
 
+    // Update what listTools returns for the refresh
+    const mockClient = vi.mocked(Client).mock.results[0].value;
+    mockClient.listTools.mockResolvedValue({
+      tools: [
+        { name: "query", description: "Execute SQL", inputSchema: { type: "object" } },
+        { name: "execute", description: "Run statement", inputSchema: { type: "object" } },
+      ],
+    });
+
     const changedPromise = new Promise<void>((resolve) => {
       client.on("tools_changed", resolve);
     });
 
     // setNotificationHandler was called with (schema, handler)
-    const mockClient = vi.mocked(Client).mock.results[0].value;
     expect(mockClient.setNotificationHandler).toHaveBeenCalled();
     const handler = mockClient.setNotificationHandler.mock.calls[0][1];
     await handler();
 
     await changedPromise;
+
+    // Cache should be updated
+    const tools = client.getTools();
+    expect(tools).toHaveLength(2);
+    expect(tools[1].name).toBe("execute");
   });
 
-  it("emits crash event when transport closes unexpectedly (stdio)", async () => {
+  it("retains last-known-good cache when refresh fails", async () => {
+    const { Client } = await import(
+      "@modelcontextprotocol/sdk/client/index.js"
+    );
+    const client = new McpClient(testDefinition, {}, logger);
+    await client.start();
+
+    // Verify initial cache
+    expect(client.getTools()).toHaveLength(1);
+
+    // Make listTools fail for the refresh
+    const mockClient = vi.mocked(Client).mock.results[0].value;
+    mockClient.listTools.mockRejectedValue(new Error("Server unreachable"));
+
+    const changedPromise = new Promise<void>((resolve) => {
+      client.on("tools_changed", resolve);
+    });
+
+    const handler = mockClient.setNotificationHandler.mock.calls[0][1];
+    await handler();
+
+    await changedPromise;
+
+    // Cache should still have the old tools
+    expect(client.getTools()).toHaveLength(1);
+    expect(client.getTools()[0].name).toBe("query");
+  });
+
+  it("emits crash event and clears cache when transport closes unexpectedly (stdio)", async () => {
     const { StdioClientTransport } = await import(
       "@modelcontextprotocol/sdk/client/stdio.js"
     );
     const client = new McpClient(testDefinition, {}, logger);
     await client.start();
+
+    // Verify tools are cached
+    expect(client.getTools()).toHaveLength(1);
 
     const crashPromise = new Promise<Error>((resolve) => {
       client.on("crash", resolve);
@@ -180,6 +227,7 @@ describe("McpClient", () => {
     const err = await crashPromise;
     expect(err.message).toContain("closed unexpectedly");
     expect(client.isRunning()).toBe(false);
+    expect(client.getTools()).toEqual([]);
   });
 
   // --- SSE transport ---

@@ -114,14 +114,16 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
     };
   }
 
-  async getTools(): Promise<Integration[]> {
+  getTools(): Integration[] {
     const integrations: Integration[] = [];
 
     for (const definition of this.config.mcpServers) {
       const mcpClient = this.processes.get(definition.id);
-      if (!mcpClient || !mcpClient.isRunning()) continue;
+      if (!mcpClient) continue;
 
-      const tools = await mcpClient.listTools();
+      const tools = mcpClient.getTools();
+      if (tools.length === 0 && !mcpClient.isRunning()) continue;
+
       integrations.push({
         id: definition.id,
         name: definition.name,
@@ -362,7 +364,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
   }
 
   private async recomputeVersions(): Promise<boolean> {
-    const mcpIntegrations = await this.getTools();
+    const mcpIntegrations = this.getTools();
     const skillIntegrations = this.skillClient.getIntegrations();
 
     const newMcpVersion = computeVersionHash(mcpIntegrations);

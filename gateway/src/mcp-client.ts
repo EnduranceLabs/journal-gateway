@@ -19,6 +19,7 @@ export class McpClient extends EventEmitter<McpClientEvents> {
   private client: Client | null = null;
   private transport: Transport | null = null;
   private running = false;
+  private cachedTools: ToolDefinition[] = [];
 
   constructor(
     private definition: McpServerConfig,
@@ -68,6 +69,7 @@ export class McpClient extends EventEmitter<McpClientEvents> {
     this.transport.onclose = () => {
       if (this.running) {
         this.running = false;
+        this.cachedTools = [];
         const err = new Error(
           `MCP ${this.definition.transport} transport for integration "${this.definition.id}" closed unexpectedly`
         );
@@ -79,12 +81,19 @@ export class McpClient extends EventEmitter<McpClientEvents> {
     await this.client.connect(this.transport);
     this.running = true;
 
+    try {
+      this.cachedTools = await this.fetchTools();
+    } catch {
+      this.logger.warn(`Initial tool fetch failed for "${this.definition.id}"`);
+    }
+
     this.client.setNotificationHandler(
       ToolListChangedNotificationSchema,
       async () => {
         this.logger.info(
           `MCP server "${this.definition.id}" reported tools changed`
         );
+        await this.refreshTools();
         this.emit("tools_changed");
       }
     );
@@ -94,7 +103,11 @@ export class McpClient extends EventEmitter<McpClientEvents> {
     );
   }
 
-  async listTools(): Promise<ToolDefinition[]> {
+  getTools(): ToolDefinition[] {
+    return this.cachedTools;
+  }
+
+  private async fetchTools(): Promise<ToolDefinition[]> {
     if (!this.client) throw new Error("MCP process not started");
 
     const result = await this.client.listTools();
@@ -103,6 +116,14 @@ export class McpClient extends EventEmitter<McpClientEvents> {
       description: tool.description ?? "",
       inputSchema: tool.inputSchema as Record<string, unknown>,
     }));
+  }
+
+  private async refreshTools(): Promise<void> {
+    try {
+      this.cachedTools = await this.fetchTools();
+    } catch {
+      this.logger.warn(`Tool refresh failed for "${this.definition.id}", keeping last-known-good`);
+    }
   }
 
   async callTool(
@@ -129,6 +150,7 @@ export class McpClient extends EventEmitter<McpClientEvents> {
 
   async stop(): Promise<void> {
     this.running = false;
+    this.cachedTools = [];
     if (this.transport) {
       await this.transport.close();
       this.transport = null;

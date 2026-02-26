@@ -58,9 +58,23 @@ export type RuntimeConfig = GatewayConfig & {
   skillsDir: string | null;
 };
 
+const WS_SCHEMES = new Set(["ws:", "wss:", "http:", "https:"]);
+
 const OperationalSchema = z.object({
   token: z.string().min(1, "JOURNAL_GATEWAY_TOKEN is required"),
-  url: z.string().url(),
+  url: z
+    .string()
+    .url()
+    .refine(
+      (u) => {
+        try {
+          return WS_SCHEMES.has(new URL(u).protocol);
+        } catch {
+          return false;
+        }
+      },
+      { message: "URL must use ws://, wss://, http://, or https:// scheme" }
+    ),
   logLevel: z.enum(["debug", "info", "warn", "error"]),
 });
 
