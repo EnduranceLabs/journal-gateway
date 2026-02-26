@@ -132,3 +132,7 @@ docker build -f packaging/docker/Dockerfile -t journal-gateway .
 # npm publish
 ./packaging/npm/publish.sh
 ```
+
+## Pre-PR checklist
+
+- Run `pnpm -r build` (or `pnpm -r typecheck`) to catch cross-package TypeScript/build issues before opening a PR or publishing.
