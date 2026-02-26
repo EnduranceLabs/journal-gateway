@@ -8,6 +8,11 @@ export interface TokenValidationResult {
 }
 
 export interface GatewayServerOptions {
+  /**
+   * Port to bind when using {@link GatewayServer.start}.
+   * Pass `0` to let the OS pick an available port.
+   * Not used when feeding connections externally via {@link GatewayServer.handleConnection}.
+   */
   port?: number;
   validateToken: (token: string) => Promise<TokenValidationResult | null>;
   pingIntervalMs?: number;
@@ -91,6 +96,13 @@ export class GatewayServer {
   onGatewayUpdated?: (gateway: ConnectedGateway) => void;
   onGatewayDisconnected?: (gateway: ConnectedGateway) => void;
 
+  /**
+   * Start a standalone WebSocket server on the configured port.
+   *
+   * If you want to manage the HTTP server yourself (e.g. Fastify, Express),
+   * skip this method and instead call {@link startHeartbeat} then pass each
+   * incoming WebSocket to {@link handleConnection}.
+   */
   async start(): Promise<void> {
     return new Promise<void>((resolve) => {
       this.wss = new WebSocketServer({ port: this._port }, () => {
@@ -103,20 +115,55 @@ export class GatewayServer {
 
       this.wss.on("connection", (ws) => this.handleConnection(ws));
 
-      const interval = this.options.pingIntervalMs ?? 30_000;
-      if (interval > 0) {
-        this.pingTimer = setInterval(() => this.sendPings(), interval);
+      this.startHeartbeat();
+    });
+  }
+
+  /**
+   * Stop the standalone WebSocket server created by {@link start}.
+   *
+   * If you manage the HTTP server yourself, use {@link shutdown} instead.
+   */
+  async stop(): Promise<void> {
+    this.shutdown();
+
+    return new Promise<void>((resolve) => {
+      if (this.wss) {
+        this.wss.close(() => resolve());
+        this.wss = null;
+      } else {
+        resolve();
       }
     });
   }
 
-  async stop(): Promise<void> {
+  /**
+   * Start the heartbeat ping timer.
+   *
+   * Called automatically by {@link start}. Call this manually when using
+   * {@link handleConnection} directly with an external HTTP server.
+   */
+  startHeartbeat(): void {
+    if (this.pingTimer) return;
+    const interval = this.options.pingIntervalMs ?? 30_000;
+    if (interval > 0) {
+      this.pingTimer = setInterval(() => this.sendPings(), interval);
+    }
+  }
+
+  /**
+   * Clean up all gateway connections and timers.
+   *
+   * Use this instead of {@link stop} when you manage the HTTP server yourself
+   * and don't need to close the internal WebSocketServer.
+   */
+  shutdown(): void {
     if (this.pingTimer) {
       clearInterval(this.pingTimer);
       this.pingTimer = null;
     }
 
-    for (const entry of this.gateways.values()) {
+    for (const [connId, entry] of this.gateways.entries()) {
       if (entry.pongTimer) clearTimeout(entry.pongTimer);
       for (const pending of entry.pending.values()) {
         clearTimeout(pending.timer);
@@ -126,17 +173,11 @@ export class GatewayServer {
         clearTimeout(pull.timer);
         pull.reject(new Error("Server shutting down"));
       }
+      // Remove before closing so the ws close handler doesn't double-fire
+      this.gateways.delete(connId);
+      this.onGatewayDisconnected?.(entry.gateway);
       entry.ws.close();
     }
-    this.gateways.clear();
-
-    return new Promise<void>((resolve) => {
-      if (this.wss) {
-        this.wss.close(() => resolve());
-      } else {
-        resolve();
-      }
-    });
   }
 
   async callTool(
@@ -390,7 +431,14 @@ export class GatewayServer {
     entry.gateway.skillsVersion = data.skillsVersion;
   }
 
-  private handleConnection(ws: WebSocket): void {
+  /**
+   * Handle a new gateway WebSocket connection.
+   *
+   * Called automatically for connections received by the internal
+   * WebSocketServer when using {@link start}. Call this manually to feed
+   * connections from an external HTTP server (e.g. a Fastify websocket route).
+   */
+  handleConnection(ws: WebSocket): void {
     const connId = `gw_${++this.connCounter}`;
     let authenticated = false;
     let organizationId = "";
