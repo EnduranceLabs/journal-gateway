@@ -7,7 +7,7 @@ export interface GatewayVersions {
 }
 
 export interface IntegrationProvider {
-  getTools(): Promise<Integration[]>;
+  getTools(): Integration[];
   getSkills(): Skill[];
   getVersions(): GatewayVersions;
   callTool(integrationId: string, toolName: string, args: Record<string, unknown>): Promise<ToolResult>;

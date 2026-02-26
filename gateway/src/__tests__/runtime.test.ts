@@ -8,7 +8,7 @@ import { EventEmitter } from "node:events";
 const mcpClientInstances: Array<{
   id: string;
   emitter: EventEmitter;
-  listTools: ReturnType<typeof vi.fn>;
+  getTools: ReturnType<typeof vi.fn>;
 }> = [];
 
 // Mock McpClient
@@ -16,7 +16,7 @@ vi.mock("../mcp-client.js", () => {
   return {
     McpClient: vi.fn().mockImplementation((definition) => {
       const emitter = new EventEmitter();
-      const listTools = vi.fn().mockResolvedValue([
+      const getTools = vi.fn().mockReturnValue([
         {
           name: "query",
           description: "Run SQL",
@@ -26,7 +26,7 @@ vi.mock("../mcp-client.js", () => {
       const instance = {
         start: vi.fn().mockResolvedValue(undefined),
         stop: vi.fn().mockResolvedValue(undefined),
-        listTools,
+        getTools,
         callTool: vi.fn().mockResolvedValue({
           content: [{ type: "text", text: "result" }],
         }),
@@ -36,7 +36,7 @@ vi.mock("../mcp-client.js", () => {
         off: emitter.off.bind(emitter),
         emit: emitter.emit.bind(emitter),
       };
-      mcpClientInstances.push({ id: definition.id, emitter, listTools });
+      mcpClientInstances.push({ id: definition.id, emitter, getTools });
       return instance;
     }),
   };
@@ -231,9 +231,9 @@ describe("Runtime", () => {
       runtime.on("versions_changed", resolve);
     });
 
-    // Update listTools to return different tools
+    // Update getTools to return different tools
     const mcpInstance = mcpClientInstances[0];
-    mcpInstance.listTools.mockResolvedValue([
+    mcpInstance.getTools.mockReturnValue([
       { name: "query", description: "Run SQL", inputSchema: { type: "object" } },
       { name: "execute", description: "Execute SQL", inputSchema: { type: "object" } },
     ]);
@@ -308,7 +308,7 @@ describe("Runtime", () => {
         description: `Tool ${j}`,
         inputSchema: { type: "object" },
       }));
-      mcpInstance.listTools.mockResolvedValue(tools);
+      mcpInstance.getTools.mockReturnValue(tools);
       mcpInstance.emitter.emit("tools_changed");
     }
 

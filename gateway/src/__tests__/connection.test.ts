@@ -20,22 +20,26 @@ class MockWebSocket extends EventEmitter {
   }
 
   close(): void {
+    this.readyState = 3;
     this.emit("close");
   }
 }
 
+// vi.mock is hoisted — can't reference top-level variables in the factory.
+// Use mockWsFactory indirection so tests can override constructor behavior.
 vi.mock("ws", () => {
   const ctor = vi.fn().mockImplementation((url: string) => {
+    if (mockWsFactory) return mockWsFactory(url);
     const ws = new MockWebSocket(url);
     mockWsInstances.push(ws);
     return ws;
   });
-  // Expose static OPEN so connection.ts readyState check works
   (ctor as unknown as Record<string, unknown>).OPEN = 1;
   return { default: ctor };
 });
 
 let mockWsInstances: MockWebSocket[] = [];
+let mockWsFactory: ((url: string) => MockWebSocket) | null = null;
 
 const config: GatewayConfig = {
   token: "gw_test123",
@@ -54,7 +58,7 @@ function createMockProvider(): IntegrationProvider & {
   };
 
   return {
-    getTools: vi.fn().mockResolvedValue([
+    getTools: vi.fn().mockReturnValue([
       {
         id: "postgresql",
         name: "PostgreSQL",
@@ -82,10 +86,20 @@ function createMockProvider(): IntegrationProvider & {
   };
 }
 
+/** Helper: authenticate the first (or Nth) mock ws instance. */
+function authenticate(ws: MockWebSocket): void {
+  ws.emit("message", JSON.stringify({
+    type: "authenticated",
+    organizationId: "org_123",
+    organizationName: "Test Org",
+  }));
+}
+
 describe("GatewayConnection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockWsInstances = [];
+    mockWsFactory = null;
   });
 
   afterEach(async () => {
@@ -110,11 +124,7 @@ describe("GatewayConnection", () => {
     expect(authMsg.protocolVersion).toBe(2);
 
     // Service responds with authenticated
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-      organizationName: "Test Org",
-    }));
+    authenticate(ws);
 
     // Wait for version_changed to be sent and connection to resolve
     await connectPromise;
@@ -137,11 +147,7 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     const ws = mockWsInstances[0];
 
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
-
+    authenticate(ws);
     await connectPromise;
 
     const versionMsg = JSON.parse(ws.sent[1]);
@@ -162,10 +168,7 @@ describe("GatewayConnection", () => {
     const ws = mockWsInstances[0];
 
     // Complete connection
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws);
     await connectPromise;
 
     // Clear sent messages
@@ -192,10 +195,7 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     const ws = mockWsInstances[0];
 
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws);
     await connectPromise;
 
     ws.sent.length = 0;
@@ -225,10 +225,7 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     const ws = mockWsInstances[0];
 
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws);
     await connectPromise;
 
     ws.sent.length = 0;
@@ -250,6 +247,37 @@ describe("GatewayConnection", () => {
     await conn.close();
   });
 
+  it("always responds to get_tools even when provider returns empty", async () => {
+    const provider = createMockProvider();
+    (provider.getTools as ReturnType<typeof vi.fn>).mockReturnValue([]);
+
+    const conn = new GatewayConnection(config, provider);
+    const connectPromise = conn.connect();
+
+    await new Promise((r) => setTimeout(r, 10));
+    const ws = mockWsInstances[0];
+
+    authenticate(ws);
+    await connectPromise;
+
+    ws.sent.length = 0;
+
+    ws.emit("message", JSON.stringify({
+      type: "get_tools",
+      requestId: "pull_empty",
+    }));
+
+    await new Promise((r) => setTimeout(r, 10));
+    // With cache-first approach, getTools() is infallible — always responds
+    expect(ws.sent).toHaveLength(1);
+    const toolsMsg = JSON.parse(ws.sent[0]);
+    expect(toolsMsg.type).toBe("tools");
+    expect(toolsMsg.requestId).toBe("pull_empty");
+    expect(toolsMsg.integrations).toEqual([]);
+
+    await conn.close();
+  });
+
   it("responds to get_skills", async () => {
     const provider = createMockProvider();
     const conn = new GatewayConnection(config, provider);
@@ -259,10 +287,7 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     const ws = mockWsInstances[0];
 
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws);
     await connectPromise;
 
     ws.sent.length = 0;
@@ -292,10 +317,7 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     const ws = mockWsInstances[0];
 
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws);
     await connectPromise;
 
     // Close should unsubscribe
@@ -305,7 +327,7 @@ describe("GatewayConnection", () => {
     expect(provider._emitter.listenerCount("versions_changed")).toBe(0);
   });
 
-  it("handles auth error", async () => {
+  it("handles auth error and retries", async () => {
     const provider = createMockProvider();
     const conn = new GatewayConnection(config, provider);
 
@@ -314,12 +336,25 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     const ws = mockWsInstances[0];
 
+    // Send auth error — ws will close, loop will retry
     ws.emit("message", JSON.stringify({
       type: "auth_error",
       error: "Invalid token",
     }));
 
-    await expect(connectPromise).rejects.toThrow("Authentication failed: Invalid token");
+    // Wait for reconnect (backoff ~1s)
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(mockWsInstances.length).toBeGreaterThanOrEqual(2);
+
+    // Authenticate on the second attempt
+    const ws2 = mockWsInstances[mockWsInstances.length - 1];
+    await new Promise((r) => setTimeout(r, 10));
+    authenticate(ws2);
+
+    // connect() should resolve now
+    await connectPromise;
+
+    await conn.close();
   });
 
   it("responds to ping with pong", async () => {
@@ -332,10 +367,7 @@ describe("GatewayConnection", () => {
     const ws = mockWsInstances[0];
 
     // Complete connection
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws);
     await connectPromise;
 
     // Send ping
@@ -359,10 +391,7 @@ describe("GatewayConnection", () => {
     const ws = mockWsInstances[0];
 
     // Complete connection
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws);
     await connectPromise;
 
     // Send tool_call
@@ -396,10 +425,7 @@ describe("GatewayConnection", () => {
     const ws1 = mockWsInstances[0];
 
     // Complete initial connection
-    ws1.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws1);
     await connectPromise;
 
     // Simulate unexpected disconnect
@@ -421,10 +447,7 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     const ws = mockWsInstances[0];
 
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws);
     await connectPromise;
 
     // Explicitly close, then wait
@@ -433,6 +456,60 @@ describe("GatewayConnection", () => {
     const countBefore = mockWsInstances.length;
     await new Promise((r) => setTimeout(r, 1500));
     expect(mockWsInstances.length).toBe(countBefore);
+  });
+
+  it("close then connect does not produce two loops", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    // First connection
+    const p1 = conn.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    const ws1 = mockWsInstances[0];
+    authenticate(ws1);
+    await p1;
+
+    // Close and immediately reconnect
+    await conn.close();
+    const p2 = conn.connect();
+
+    await new Promise((r) => setTimeout(r, 10));
+    const ws2 = mockWsInstances[mockWsInstances.length - 1];
+    authenticate(ws2);
+    await p2;
+
+    // Only one new WS should have been created for the second connect.
+    // ws1 (original) + ws2 (reconnect) = 2 total, not 3+.
+    expect(mockWsInstances).toHaveLength(2);
+
+    await conn.close();
+  });
+
+  it("close in-flight followed by immediate connect starts one new loop", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    // Establish first connection
+    const p1 = conn.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    authenticate(mockWsInstances[0]);
+    await p1;
+
+    // Start close but don't await — immediately reconnect
+    const closePromise = conn.close();
+    const p2 = conn.connect();
+
+    // Let close drain and new loop start
+    await closePromise;
+    await new Promise((r) => setTimeout(r, 10));
+    const ws2 = mockWsInstances[mockWsInstances.length - 1];
+    authenticate(ws2);
+    await p2;
+
+    // Original + new = 2 total (no extra from races)
+    expect(mockWsInstances).toHaveLength(2);
+
+    await conn.close();
   });
 
   it("sends tool_error for unknown integration", async () => {
@@ -447,10 +524,7 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     const ws = mockWsInstances[0];
 
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws);
     await connectPromise;
 
     ws.emit("message", JSON.stringify({
@@ -483,12 +557,77 @@ describe("GatewayConnection", () => {
     ws.emit("message", "not json at all{{{");
 
     // Complete connection normally
-    ws.emit("message", JSON.stringify({
-      type: "authenticated",
-      organizationId: "org_123",
-    }));
+    authenticate(ws);
 
     await connectPromise;
+    await conn.close();
+  });
+
+  it("recovers from WebSocket constructor sync throw", async () => {
+    const provider = createMockProvider();
+
+    // First call throws synchronously, second succeeds normally
+    let callCount = 0;
+    mockWsFactory = (url: string) => {
+      callCount++;
+      if (callCount === 1) {
+        throw new Error("Invalid URL");
+      }
+      const ws = new MockWebSocket(url);
+      mockWsInstances.push(ws);
+      return ws;
+    };
+
+    const conn = new GatewayConnection(config, provider);
+
+    const connectPromise = conn.connect();
+
+    // Wait for retry after sync throw (backoff ~1s)
+    await new Promise((r) => setTimeout(r, 1500));
+
+    // Second attempt should have created a ws
+    expect(mockWsInstances.length).toBeGreaterThanOrEqual(1);
+    const ws = mockWsInstances[mockWsInstances.length - 1];
+    await new Promise((r) => setTimeout(r, 10));
+    authenticate(ws);
+
+    await connectPromise;
+    await conn.close();
+  });
+
+  it("close() before first auth rejects connect()", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    const connectPromise = conn.connect();
+
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Close before authenticating
+    await conn.close();
+
+    await expect(connectPromise).rejects.toThrow("Connection closed");
+  });
+
+  it("connect() is idempotent — second call returns same promise", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    const p1 = conn.connect();
+    const p2 = conn.connect();
+
+    // Same promise — no duplicate loops
+    expect(p2).toBe(p1);
+
+    await new Promise((r) => setTimeout(r, 10));
+    const ws = mockWsInstances[0];
+
+    // Only one WebSocket was created
+    expect(mockWsInstances).toHaveLength(1);
+
+    authenticate(ws);
+    await p1;
+
     await conn.close();
   });
 });

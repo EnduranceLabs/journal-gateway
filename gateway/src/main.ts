@@ -77,10 +77,9 @@ async function main(): Promise<void> {
   await runtime.start();
 
   const connection = new GatewayConnection(config, runtime, telemetry, audit);
-  await connection.connect();
 
-  logger.info("Journal Gateway is running");
-
+  // Register signal handlers before connect() so shutdown works during
+  // startup retries (connect blocks until first auth success).
   const shutdown = async (signal: string) => {
     logger.info(`Received ${signal}, shutting down`);
     await connection.close();
@@ -91,6 +90,14 @@ async function main(): Promise<void> {
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
+
+  try {
+    await connection.connect();
+    logger.info("Journal Gateway is running");
+  } catch {
+    // close() was called before first successful connection
+    // (e.g. SIGTERM during startup). Shutdown handler already ran.
+  }
 }
 
 main().catch((err) => {

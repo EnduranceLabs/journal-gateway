@@ -9,10 +9,13 @@ libraries for the service side. Keep it simple.
   types shared by both gateway and client libraries (Integration, ToolResult, Skill,
   message schemas, IntegrationProvider, GatewayConfig, errors).
 - `gateway/src/common/` — Shared utilities (logger).
-- `gateway/src/connection.ts` — WebSocket connection to Journal service. Handles
-  authentication, sends `version_changed` after auth, responds to pull requests
-  (`get_versions`, `get_tools`, `get_skills`), routes tool calls, handles ping/pong,
-  and reconnects with exponential backoff. Protocol version 2 (pull-based).
+- `gateway/src/connection.ts` — WebSocket connection to Journal service. Uses a single
+  async reconnect loop (`connect()` is idempotent; `close()` drains the loop before a
+  new `connect()` can start). Handles authentication, sends `version_changed` after
+  auth, responds to pull requests (`get_versions`, `get_tools`, `get_skills`), routes
+  tool calls, and handles ping/pong. The message handler has a top-level try/catch to
+  prevent unhandled rejections. Reconnects with exponential backoff (1s initial, 2x
+  multiplier, 30s max, ±25% jitter). Protocol version 2 (pull-based).
 - `gateway/src/runtime.ts` — Runtime that manages MCP clients and skills. Implements
   IntegrationProvider with `getTools()` and `getSkills()`. Tracks content-hash
   versions (mcpVersion/skillsVersion) and emits `versions_changed` when tools or
@@ -22,9 +25,11 @@ libraries for the service side. Keep it simple.
 - `gateway/src/mcp-client.ts` — Manages individual MCP server connections across three
   transports: `stdio` (subprocess), `sse` (SSEClientTransport), and `streamable-http`
   (StreamableHTTPClientTransport). Uses a `createTransport()` factory that switches on
-  the config's `transport` field. Listens for MCP `notifications/tools/list_changed`
-  and emits `tools_changed`. Crash handling (`onclose`) works identically for all
-  transports.
+  the config's `transport` field. Cache-first design: tools are fetched on `start()`
+  and cached in memory; `getTools()` returns the cached snapshot synchronously.
+  Listens for MCP `notifications/tools/list_changed`, refreshes the cache, and emits
+  `tools_changed`. On refresh failure, retains last-known-good cache. Crash handling
+  (`onclose`) clears the cache and works identically for all transports.
 - `gateway/src/skill-client.ts` — Loads skill files (raw Markdown) from a directory.
   Watches the skills directory with `fs.watch` and emits `skills_changed` on `.md`
   file changes. Exposes `getSkills()` for direct skill access and `getIntegrations()`
@@ -76,10 +81,10 @@ are treated as `stdio` for backward compatibility.
 
 ## IntegrationProvider Interface
 The Runtime implements this interface to provide capabilities to the connection:
-- `getTools()` — return MCP tool integrations
-- `getSkills()` — return skills (synchronous — loaded in memory)
-- `getVersions()` — return `{ mcpVersion, skillsVersion }` content hashes (null if empty)
-- `callTool(integrationId, toolName, args)` — execute a tool call
+- `getTools(): Integration[]` — synchronous, returns cached MCP tool integrations
+- `getSkills(): Skill[]` — synchronous, returns skills loaded in memory
+- `getVersions(): GatewayVersions` — return `{ mcpVersion, skillsVersion }` content hashes (null if empty)
+- `callTool(integrationId, toolName, args)` — execute a tool call (async)
 - `start()` / `stop()` — lifecycle management
 - `on/off("versions_changed")` — optional event for proactive change notification
 

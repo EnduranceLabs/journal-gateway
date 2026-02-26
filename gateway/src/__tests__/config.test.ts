@@ -50,6 +50,18 @@ describe("parseConfig", () => {
     expect(config.logLevel).toBe("debug");
   });
 
+  it("rejects non-WebSocket URL schemes", () => {
+    expect(() =>
+      parseConfig(
+        baseEnv({
+          JOURNAL_GATEWAY_URL: "ftp://example.com",
+          JOURNAL_GATEWAY_CONFIG: "{}",
+        }),
+        []
+      )
+    ).toThrow("URL must use ws://, wss://, http://, or https:// scheme");
+  });
+
   // --- Config file loading ---
 
   it("loads config from --config file path", () => {
