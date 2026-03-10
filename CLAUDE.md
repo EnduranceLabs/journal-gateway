@@ -34,6 +34,14 @@ libraries for the service side. Keep it simple.
   Watches the skills directory with `fs.watch` and emits `skills_changed` on `.md`
   file changes. Exposes `getSkills()` for direct skill access and `getIntegrations()`
   for version hash computation.
+- `gateway/src/types.ts` — Shared plain types used across gateway modules (e.g.
+  `ToolCallOutcome` discriminated union for tool call results). No runtime code, no
+  external dependencies — keeps OTel and protocol types out of modules that don't need them.
+- `gateway/src/telemetry.ts` — Optional OpenTelemetry integration (tracing + metrics).
+  Exports `Telemetry` class with `traceToolCall()` for span-wrapped tool calls and
+  `recordToolCall()` for histogram/counter metrics. All OTel span manipulation is
+  contained here — other modules never import `@opentelemetry/*`. Supports W3C trace
+  context propagation via `traceparent`/`tracestate` on `traceToolCall()`.
 - `gateway/src/version-hash.ts` — Computes stable content hashes (SHA-256, 16 hex chars)
   over integration arrays for change detection.
 - `gateway/src/config.ts` — Parses operational env vars and loads the gateway config file

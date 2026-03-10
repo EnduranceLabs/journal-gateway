@@ -1,4 +1,5 @@
-import { trace, metrics, context, propagation, type AttributeValue } from "@opentelemetry/api";
+import { trace, metrics, context, propagation, SpanStatusCode, type AttributeValue } from "@opentelemetry/api";
+import type { ToolCallOutcome } from "./types.js";
 import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
@@ -104,13 +105,52 @@ export class Telemetry {
             resolve(result);
           } catch (err) {
             span.recordException(err as Error);
-            span.setStatus({ code: 2 });
+            span.setStatus({ code: SpanStatusCode.ERROR });
             span.end();
             reject(err);
           }
         }
       );
     });
+  }
+
+  /**
+   * Trace a tool call, setting span attributes based on the outcome.
+   * Keeps all OpenTelemetry span manipulation inside this class so
+   * callers never need to import OTel types.
+   */
+  async traceToolCall(
+    attrs: { integrationId: string; toolName: string; requestId: string },
+    fn: () => Promise<ToolCallOutcome>,
+    traceparent?: string,
+    tracestate?: string,
+  ): Promise<ToolCallOutcome> {
+    return this.startActiveSpan(
+      "gateway.tool_call",
+      attrs,
+      async (span) => {
+        const outcome = await fn();
+        switch (outcome.kind) {
+          case "success":
+            span.setAttribute("gateway.tool_call.is_error", false);
+            break;
+          case "tool_error":
+            span.setStatus({ code: SpanStatusCode.ERROR, message: "Tool returned error" });
+            span.setAttribute("gateway.tool_call.is_error", true);
+            span.setAttribute("gateway.tool_call.error_message", outcome.error);
+            break;
+          case "exception":
+            span.setStatus({ code: SpanStatusCode.ERROR, message: outcome.error });
+            span.setAttribute("gateway.tool_call.is_error", true);
+            span.setAttribute("gateway.tool_call.error_code", outcome.code);
+            span.setAttribute("gateway.tool_call.error_message", outcome.error);
+            break;
+        }
+        return outcome;
+      },
+      traceparent,
+      tracestate,
+    );
   }
 
   recordToolCall(durationMs: number, success: boolean, code?: string): void {
