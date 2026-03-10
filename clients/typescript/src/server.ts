@@ -7,6 +7,11 @@ export interface TokenValidationResult {
   organizationName?: string;
 }
 
+export interface TraceContext {
+  traceparent: string;
+  tracestate?: string;
+}
+
 export interface GatewayServerOptions {
   /**
    * Port to bind when using {@link GatewayServer.start}.
@@ -17,6 +22,12 @@ export interface GatewayServerOptions {
   validateToken: (token: string) => Promise<TokenValidationResult | null>;
   pingIntervalMs?: number;
   pullTimeoutMs?: number;
+  /**
+   * Optional hook to extract W3C trace context from the active span for
+   * propagation to the gateway. Called when sending tool_call messages.
+   * Return `null` when no active trace context is available.
+   */
+  getTraceContext?: () => TraceContext | null;
 }
 
 export interface ConnectedGateway {
@@ -94,7 +105,11 @@ export class GatewayServer {
 
   onGatewayConnected?: (gateway: ConnectedGateway) => void;
   onGatewayUpdated?: (gateway: ConnectedGateway) => void;
-  onGatewayDisconnected?: (gateway: ConnectedGateway) => void;
+  onGatewayDisconnected?: (
+    gateway: ConnectedGateway,
+    closeCode?: number,
+    closeReason?: string,
+  ) => void;
 
   /**
    * Start a standalone WebSocket server on the configured port.
@@ -332,6 +347,7 @@ export class GatewayServer {
 
       entry.pending.set(requestId, { resolve, reject, timer });
 
+      const traceCtx = this.options.getTraceContext?.() ?? null;
       entry.ws.send(
         JSON.stringify({
           type: "tool_call",
@@ -339,6 +355,12 @@ export class GatewayServer {
           integrationId,
           toolName,
           arguments: args,
+          ...(traceCtx?.traceparent
+            ? { traceparent: traceCtx.traceparent }
+            : {}),
+          ...(traceCtx?.tracestate
+            ? { tracestate: traceCtx.tracestate }
+            : {}),
         })
       );
     });
@@ -622,7 +644,7 @@ export class GatewayServer {
       }
     });
 
-    ws.on("close", () => {
+    ws.on("close", (code: number, reason: Buffer) => {
       clearTimeout(authTimer);
       const entry = this.gateways.get(connId);
       if (entry) {
@@ -636,7 +658,8 @@ export class GatewayServer {
           pull.reject(new Error("Gateway disconnected"));
         }
         this.gateways.delete(connId);
-        this.onGatewayDisconnected?.(entry.gateway);
+        const reasonStr = reason?.toString() || undefined;
+        this.onGatewayDisconnected?.(entry.gateway, code, reasonStr);
       }
     });
   }

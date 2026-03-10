@@ -107,6 +107,10 @@ export const ToolCallMessageSchema = z.object({
   integrationId: z.string(),
   toolName: z.string(),
   arguments: z.record(z.unknown()),
+  /** W3C Trace Context traceparent header for distributed tracing. */
+  traceparent: z.string().optional(),
+  /** W3C Trace Context tracestate header for distributed tracing. */
+  tracestate: z.string().optional(),
 });
 
 export type ToolCallMessage = z.infer<typeof ToolCallMessageSchema>;

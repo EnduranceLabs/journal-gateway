@@ -1,4 +1,4 @@
-import { trace, metrics, context, type AttributeValue } from "@opentelemetry/api";
+import { trace, metrics, context, propagation, type AttributeValue } from "@opentelemetry/api";
 import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
@@ -76,14 +76,26 @@ export class Telemetry {
   startActiveSpan<T>(
     name: string,
     attrs: Attributes,
-    fn: (span: import("@opentelemetry/api").Span) => Promise<T>
+    fn: (span: import("@opentelemetry/api").Span) => Promise<T>,
+    traceparent?: string,
+    tracestate?: string,
   ): Promise<T> {
     const tracer = trace.getTracer("gateway");
+
+    // Use remote parent context when a W3C traceparent is provided,
+    // otherwise fall back to the current active context.
+    let parentCtx = context.active();
+    if (traceparent) {
+      const carrier: Record<string, string> = { traceparent };
+      if (tracestate) carrier.tracestate = tracestate;
+      parentCtx = propagation.extract(parentCtx, carrier);
+    }
+
     return new Promise<T>((resolve, reject) => {
       tracer.startActiveSpan(
         name,
         { attributes: attrs },
-        context.active(),
+        parentCtx,
         async (span) => {
           try {
             const result = await fn(span);

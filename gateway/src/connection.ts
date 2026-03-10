@@ -1,3 +1,4 @@
+import { SpanStatusCode, type Span } from "@opentelemetry/api";
 import WebSocket from "ws";
 import {
   ServiceMessageSchema,
@@ -293,7 +294,14 @@ export class GatewayConnection {
                 requestId: msg.requestId,
                 integrationId: msg.integrationId,
               });
-              this.handleToolCall(msg.requestId, msg.integrationId, msg.toolName, msg.arguments);
+              this.handleToolCall(
+                msg.requestId,
+                msg.integrationId,
+                msg.toolName,
+                msg.arguments,
+                msg.traceparent,
+                msg.tracestate,
+              );
               break;
             }
 
@@ -310,8 +318,11 @@ export class GatewayConnection {
         }
       });
 
-      ws.on("close", () => {
-        this.logger.warn("WebSocket disconnected");
+      ws.on("close", (code: number, reason: Buffer) => {
+        this.logger.warn("WebSocket disconnected", {
+          closeCode: code,
+          closeReason: reason?.toString() || undefined,
+        });
         clearTimeout(authTimer);
         this.unsubscribeFromChanges();
         this.ws = null;
@@ -377,7 +388,9 @@ export class GatewayConnection {
     requestId: string,
     integrationId: string,
     toolName: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
+    traceparent?: string,
+    tracestate?: string,
   ): Promise<void> {
     const start = Date.now();
 
@@ -403,7 +416,7 @@ export class GatewayConnection {
       requestId,
     };
 
-    const call = async () => {
+    const call = async (span?: Span) => {
       try {
         const result = await Promise.race([
           this.provider.callTool(integrationId, toolName, args),
@@ -412,32 +425,78 @@ export class GatewayConnection {
 
         this.send({ type: "tool_result", requestId, result });
 
-        this.logger.toolCall({
-          integrationId,
-          toolName,
-          requestId,
-          durationMs: Date.now() - start,
-          success: true,
-        });
-        this.telemetry?.recordToolCall(Date.now() - start, true);
-        await this.audit?.log({
-          type: "tool_call",
-          stage: "result",
-          integrationId,
-          toolName,
-          requestId,
-          durationMs: Date.now() - start,
-          outcome: "success",
-        });
+        const isToolError = result.isError === true;
+        const durationMs = Date.now() - start;
+
+        if (isToolError) {
+          // Extract error text from the result for logging at the source.
+          // This is where the MCP tool actually ran — full error details belong here.
+          const errorText = result.content
+            .filter((c): c is { type: "text"; text: string } => c.type === "text")
+            .map((c) => c.text)
+            .join("\n");
+          const errorSummary = errorText.length > 1024
+            ? errorText.slice(0, 1024) + "…"
+            : errorText || "tool returned isError with no text";
+
+          span?.setStatus({ code: SpanStatusCode.ERROR, message: "Tool returned error" });
+          span?.setAttribute("gateway.tool_call.is_error", true);
+          span?.setAttribute("gateway.tool_call.error_message", errorSummary);
+
+          this.logger.toolCall({
+            integrationId,
+            toolName,
+            requestId,
+            durationMs,
+            success: false,
+            error: errorSummary,
+          });
+          this.telemetry?.recordToolCall(durationMs, false, "TOOL_ERROR");
+          await this.audit?.log({
+            type: "tool_call",
+            stage: "error",
+            integrationId,
+            toolName,
+            requestId,
+            durationMs,
+            outcome: "TOOL_ERROR",
+            errorMessage: errorSummary,
+          });
+        } else {
+          span?.setAttribute("gateway.tool_call.is_error", false);
+
+          this.logger.toolCall({
+            integrationId,
+            toolName,
+            requestId,
+            durationMs,
+            success: true,
+          });
+          this.telemetry?.recordToolCall(durationMs, true);
+          await this.audit?.log({
+            type: "tool_call",
+            stage: "result",
+            integrationId,
+            toolName,
+            requestId,
+            durationMs,
+            outcome: "success",
+          });
+        }
       } catch (err) {
         let code: GatewayErrorCode = "EXECUTION_FAILED";
-        let message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof Error ? err.message : String(err);
 
         if (err instanceof IntegrationNotFoundError) {
           code = "INTEGRATION_NOT_FOUND";
         } else if (err instanceof ToolTimeoutError) {
           code = "TIMEOUT";
         }
+
+        span?.setStatus({ code: SpanStatusCode.ERROR, message });
+        span?.setAttribute("gateway.tool_call.is_error", true);
+        span?.setAttribute("gateway.tool_call.error_code", code);
+        span?.setAttribute("gateway.tool_call.error_message", message);
 
         this.send({
           type: "tool_error",
@@ -472,9 +531,15 @@ export class GatewayConnection {
     };
 
     if (this.telemetry) {
-      await this.telemetry.startActiveSpan("gateway.tool_call", spanAttrs, async (span) => {
-        await call();
-      });
+      await this.telemetry.startActiveSpan(
+        "gateway.tool_call",
+        spanAttrs,
+        async (span) => {
+          await call(span);
+        },
+        traceparent,
+        tracestate,
+      );
     } else {
       await call();
     }
