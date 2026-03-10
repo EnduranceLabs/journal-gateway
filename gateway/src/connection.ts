@@ -11,6 +11,7 @@ import {
 import { Logger } from "./common/logger.js";
 import { VERSION } from "./version.js";
 import { Telemetry } from "./telemetry.js";
+import type { ToolCallOutcome } from "./types.js";
 import { AuditLogger } from "./audit.js";
 
 const PROTOCOL_VERSION = 2;
@@ -293,7 +294,14 @@ export class GatewayConnection {
                 requestId: msg.requestId,
                 integrationId: msg.integrationId,
               });
-              this.handleToolCall(msg.requestId, msg.integrationId, msg.toolName, msg.arguments);
+              this.handleToolCall(
+                msg.requestId,
+                msg.integrationId,
+                msg.toolName,
+                msg.arguments,
+                msg.traceparent,
+                msg.tracestate,
+              );
               break;
             }
 
@@ -310,8 +318,11 @@ export class GatewayConnection {
         }
       });
 
-      ws.on("close", () => {
-        this.logger.warn("WebSocket disconnected");
+      ws.on("close", (code: number, reason: Buffer) => {
+        this.logger.warn("WebSocket disconnected", {
+          closeCode: code,
+          closeReason: reason?.toString() || undefined,
+        });
         clearTimeout(authTimer);
         this.unsubscribeFromChanges();
         this.ws = null;
@@ -377,7 +388,9 @@ export class GatewayConnection {
     requestId: string,
     integrationId: string,
     toolName: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
+    traceparent?: string,
+    tracestate?: string,
   ): Promise<void> {
     const start = Date.now();
 
@@ -397,13 +410,9 @@ export class GatewayConnection {
       requestId,
     });
 
-    const spanAttrs = {
-      integrationId,
-      toolName,
-      requestId,
-    };
+    const ctx = { integrationId, toolName, requestId };
 
-    const call = async () => {
+    const execute = async (): Promise<ToolCallOutcome> => {
       try {
         const result = await Promise.race([
           this.provider.callTool(integrationId, toolName, args),
@@ -412,26 +421,23 @@ export class GatewayConnection {
 
         this.send({ type: "tool_result", requestId, result });
 
-        this.logger.toolCall({
-          integrationId,
-          toolName,
-          requestId,
-          durationMs: Date.now() - start,
-          success: true,
-        });
-        this.telemetry?.recordToolCall(Date.now() - start, true);
-        await this.audit?.log({
-          type: "tool_call",
-          stage: "result",
-          integrationId,
-          toolName,
-          requestId,
-          durationMs: Date.now() - start,
-          outcome: "success",
-        });
+        const durationMs = Date.now() - start;
+
+        if (result.isError === true) {
+          const errorText = result.content
+            .filter((c): c is { type: "text"; text: string } => c.type === "text")
+            .map((c) => c.text)
+            .join("\n");
+          const error = errorText.length > 1024
+            ? errorText.slice(0, 1024) + "…"
+            : errorText || "tool returned isError with no text";
+          return { kind: "tool_error", durationMs, error };
+        }
+
+        return { kind: "success", durationMs };
       } catch (err) {
         let code: GatewayErrorCode = "EXECUTION_FAILED";
-        let message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof Error ? err.message : String(err);
 
         if (err instanceof IntegrationNotFoundError) {
           code = "INTEGRATION_NOT_FOUND";
@@ -445,25 +451,7 @@ export class GatewayConnection {
           error: { code, message },
         });
 
-        this.logger.toolCall({
-          integrationId,
-          toolName,
-          requestId,
-          durationMs: Date.now() - start,
-          success: false,
-          error: message,
-        });
-        this.telemetry?.recordToolCall(Date.now() - start, false, code);
-        await this.audit?.log({
-          type: "tool_call",
-          stage: "error",
-          integrationId,
-          toolName,
-          requestId,
-          durationMs: Date.now() - start,
-          outcome: code,
-          errorMessage: message,
-        });
+        return { kind: "exception", durationMs: Date.now() - start, error: message, code };
       } finally {
         if (timeoutId !== null) {
           clearTimeout(timeoutId);
@@ -471,12 +459,54 @@ export class GatewayConnection {
       }
     };
 
-    if (this.telemetry) {
-      await this.telemetry.startActiveSpan("gateway.tool_call", spanAttrs, async (span) => {
-        await call();
-      });
-    } else {
-      await call();
+    let outcome: ToolCallOutcome;
+    try {
+      outcome = this.telemetry
+        ? await this.telemetry.traceToolCall(ctx, execute, traceparent, tracestate)
+        : await execute();
+    } catch (err) {
+      // execute() catches its own errors, but if an unexpected failure
+      // occurs (e.g. ws.send() throws while building the error response),
+      // ensure we still record the outcome rather than silently dropping it.
+      const message = err instanceof Error ? err.message : String(err);
+      outcome = { kind: "exception", durationMs: Date.now() - start, error: message, code: "EXECUTION_FAILED" };
+    }
+
+    await this.recordOutcome(outcome, ctx);
+  }
+
+  private async recordOutcome(
+    outcome: ToolCallOutcome,
+    ctx: { integrationId: string; toolName: string; requestId: string },
+  ): Promise<void> {
+    const { integrationId, toolName, requestId } = ctx;
+    const { durationMs } = outcome;
+
+    switch (outcome.kind) {
+      case "success":
+        this.logger.toolCall({ integrationId, toolName, requestId, durationMs, success: true });
+        this.telemetry?.recordToolCall(durationMs, true);
+        await this.audit?.log({
+          type: "tool_call", stage: "result",
+          integrationId, toolName, requestId, durationMs, outcome: "success",
+        });
+        break;
+      case "tool_error":
+        this.logger.toolCall({ integrationId, toolName, requestId, durationMs, success: false, error: outcome.error });
+        this.telemetry?.recordToolCall(durationMs, false, "TOOL_ERROR");
+        await this.audit?.log({
+          type: "tool_call", stage: "error",
+          integrationId, toolName, requestId, durationMs, outcome: "TOOL_ERROR", errorMessage: outcome.error,
+        });
+        break;
+      case "exception":
+        this.logger.toolCall({ integrationId, toolName, requestId, durationMs, success: false, error: outcome.error });
+        this.telemetry?.recordToolCall(durationMs, false, outcome.code);
+        await this.audit?.log({
+          type: "tool_call", stage: "error",
+          integrationId, toolName, requestId, durationMs, outcome: outcome.code, errorMessage: outcome.error,
+        });
+        break;
     }
   }
 
