@@ -383,8 +383,10 @@ describe("GatewayServer (external server mode)", () => {
   let httpServer: HttpServer;
   let wss: WebSocketServer;
   let port: number;
+  let serverSockets: WebSocket[];
 
   beforeEach(async () => {
+    serverSockets = [];
     gateway = new GatewayServer({
       validateToken: async (token) =>
         token === "gw_valid"
@@ -400,6 +402,7 @@ describe("GatewayServer (external server mode)", () => {
     httpServer.on("upgrade", (req, socket, head) => {
       if (req.url === "/ws") {
         wss.handleUpgrade(req, socket, head, (ws) => {
+          serverSockets.push(ws);
           gateway.handleConnection(ws);
         });
       } else {
@@ -485,6 +488,39 @@ describe("GatewayServer (external server mode)", () => {
     await sendVersionChanged(ws2, []);
     expect(gateway.connectedGateways).toHaveLength(1);
     ws2.close();
+  });
+
+  it("socket error events do not crash and are surfaced via onSocketError", async () => {
+    // An unhandled "error" event on the server-side socket would throw at the
+    // process level and take down the host service (JO-6988 class of failure).
+    const errors: Array<{ error: Error; gatewayId: string | null }> = [];
+    gateway = new GatewayServer({
+      validateToken: async (token) =>
+        token === "gw_valid" ? { organizationId: "org_1" } : null,
+      pingIntervalMs: 0,
+      onSocketError: (error, gw) => errors.push({ error, gatewayId: gw?.id ?? null }),
+    });
+    httpServer.removeAllListeners("upgrade");
+    httpServer.on("upgrade", (req, socket, head) => {
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        serverSockets.push(ws);
+        gateway.handleConnection(ws);
+      });
+    });
+
+    const ws = await connectAndAuth(`ws://localhost:${port}/ws`, "gw_valid");
+    await sendVersionChanged(ws, []);
+    expect(serverSockets).toHaveLength(1);
+
+    // With no "error" listener this emit would throw (unhandled 'error').
+    expect(() =>
+      serverSockets[0].emit("error", new Error("read ECONNRESET"))
+    ).not.toThrow();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0].error.message).toBe("read ECONNRESET");
+    expect(errors[0].gatewayId).toBe(gateway.connectedGateways[0].id);
+    ws.close();
   });
 
   it("startHeartbeat sends pings", async () => {

@@ -55,7 +55,48 @@ const result = await server.callTool("postgresql", "query", {
 
 - **`onGatewayConnected`** — fired after a gateway authenticates and its initial tools/skills are pulled
 - **`onGatewayUpdated`** — fired when a gateway's tools or skills change at runtime
-- **`onGatewayDisconnected`** — fired when a gateway disconnects
+- **`onGatewayDisconnected(gateway, closeCode?, closeReason?)`** — fired when a gateway disconnects
+
+## Telemetry
+
+The library has no telemetry dependency of its own. Two options on
+`GatewayServerOptions` let you wire it into your logging/tracing stack:
+
+- **`getTraceContext()`** — called on every `callTool`. Return the active
+  W3C trace context (`{ traceparent, tracestate? }`) and it is propagated on
+  the `tool_call` message; the gateway parents its `gateway.tool_call` span
+  onto it, so the remote tool execution appears in your distributed trace.
+  Return `null` when there is no active span.
+- **`onSocketError(error, gateway | null)`** — called when a gateway socket
+  emits an `error` event (e.g. `ECONNRESET`). `gateway` is `null` if the
+  socket errored before completing the handshake. The socket closes
+  afterwards; if the gateway had connected, `onGatewayDisconnected` fires as
+  usual (pre-handshake sockets have no gateway to disconnect). The library never
+  writes to the console or anywhere else on its own — if you don't provide
+  this callback, socket error details are dropped (the process is still
+  protected from crashing either way), so bind it if you want visibility
+  into connection-level failures.
+
+Example wiring with OpenTelemetry and a structured logger:
+
+```ts
+import { context, propagation } from "@opentelemetry/api";
+
+const server = new GatewayServer({
+  port: 8080,
+  validateToken,
+  getTraceContext: () => {
+    const carrier: Record<string, string> = {};
+    propagation.inject(context.active(), carrier);
+    return carrier.traceparent
+      ? { traceparent: carrier.traceparent, tracestate: carrier.tracestate }
+      : null;
+  },
+  onSocketError: (error, gateway) => {
+    logger.error({ error, gatewayId: gateway?.id }, "gateway socket error");
+  },
+});
+```
 
 ## Full documentation
 

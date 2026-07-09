@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { GatewayConnection } from "../connection.js";
+import { GatewayConnection, AuthenticationError } from "../connection.js";
 import type { GatewayConfig, IntegrationProvider, GatewayVersions, Skill } from "@journal.one/gateway-protocol";
 import { EventEmitter } from "node:events";
 
@@ -327,7 +327,7 @@ describe("GatewayConnection", () => {
     expect(provider._emitter.listenerCount("versions_changed")).toBe(0);
   });
 
-  it("handles auth error and retries", async () => {
+  it("rejects connect() and stops retrying on auth error before first success", async () => {
     const provider = createMockProvider();
     const conn = new GatewayConnection(config, provider);
 
@@ -336,23 +336,53 @@ describe("GatewayConnection", () => {
     await new Promise((r) => setTimeout(r, 10));
     const ws = mockWsInstances[0];
 
-    // Send auth error — ws will close, loop will retry
+    // A rejected token on the initial connection is a configuration error
     ws.emit("message", JSON.stringify({
       type: "auth_error",
       error: "Invalid token",
     }));
 
-    // Wait for reconnect (backoff ~1s)
+    // main.ts branches on the error class for fail-fast exit
+    const err = await connectPromise.then(
+      () => null,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(AuthenticationError);
+    expect((err as Error).message).toBe("Invalid token");
+
+    // The loop must stop — no reconnect attempt after the ~1s backoff window
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(mockWsInstances).toHaveLength(1);
+
+    await conn.close();
+  });
+
+  it("keeps retrying on auth error after a successful session", async () => {
+    const provider = createMockProvider();
+    const conn = new GatewayConnection(config, provider);
+
+    const connectPromise = conn.connect();
+    await new Promise((r) => setTimeout(r, 10));
+    authenticate(mockWsInstances[0]);
+    await connectPromise;
+
+    // Drop the connection — the loop reconnects after ~1s backoff
+    mockWsInstances[0].close();
     await new Promise((r) => setTimeout(r, 1500));
     expect(mockWsInstances.length).toBeGreaterThanOrEqual(2);
 
-    // Authenticate on the second attempt
+    // Auth error on a reconnect (e.g. mid token rotation) stays retryable
     const ws2 = mockWsInstances[mockWsInstances.length - 1];
     await new Promise((r) => setTimeout(r, 10));
-    authenticate(ws2);
+    const countBefore = mockWsInstances.length;
+    ws2.emit("message", JSON.stringify({
+      type: "auth_error",
+      error: "Invalid token",
+    }));
 
-    // connect() should resolve now
-    await connectPromise;
+    // Next backoff is ~2s ±25% jitter
+    await new Promise((r) => setTimeout(r, 3000));
+    expect(mockWsInstances.length).toBeGreaterThan(countBefore);
 
     await conn.close();
   });

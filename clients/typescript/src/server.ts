@@ -28,6 +28,13 @@ export interface GatewayServerOptions {
    * Return `null` when no active trace context is available.
    */
   getTraceContext?: () => TraceContext | null;
+  /**
+   * Called when a gateway socket emits an `error` event (e.g. ECONNRESET).
+   * `gateway` is `null` if the socket errored before completing the
+   * handshake. When not provided, socket errors are dropped — the library
+   * never logs on its own.
+   */
+  onSocketError?: (error: Error, gateway: ConnectedGateway | null) => void;
 }
 
 export interface ConnectedGateway {
@@ -642,6 +649,11 @@ export class GatewayServer {
           break;
         }
       }
+    });
+
+    // An "error" event with no listener crashes the host process.
+    ws.on("error", (err: Error) => {
+      this.options.onSocketError?.(err, this.gateways.get(connId)?.gateway ?? null);
     });
 
     ws.on("close", (code: number, reason: Buffer) => {

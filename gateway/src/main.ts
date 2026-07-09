@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { parseConfig, resolveConfigFilePath } from "./config.js";
 import { EnvFile } from "./env-file.js";
 import { Runtime } from "./runtime.js";
-import { GatewayConnection } from "./connection.js";
+import { GatewayConnection, AuthenticationError } from "./connection.js";
 import { Logger } from "./common/logger.js";
 import { Telemetry } from "./telemetry.js";
 import { AuditLogger } from "./audit.js";
@@ -94,7 +94,15 @@ async function main(): Promise<void> {
   try {
     await connection.connect();
     logger.info("Journal Gateway is running");
-  } catch {
+  } catch (err) {
+    if (err instanceof AuthenticationError) {
+      logger.error("Service rejected the gateway token, exiting", {
+        error: err.message,
+      });
+      await runtime.stop();
+      await telemetry.shutdown();
+      process.exit(1);
+    }
     // close() was called before first successful connection
     // (e.g. SIGTERM during startup). Shutdown handler already ran.
   }

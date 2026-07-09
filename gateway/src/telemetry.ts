@@ -100,7 +100,6 @@ export class Telemetry {
         async (span) => {
           try {
             const result = await fn(span);
-            span.setAttributes(attrs);
             span.end();
             resolve(result);
           } catch (err) {

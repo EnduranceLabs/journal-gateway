@@ -24,6 +24,14 @@ class ToolTimeoutError extends Error {
     this.name = "ToolTimeoutError";
   }
 }
+
+/** The service rejected the gateway's token on the initial connection. */
+export class AuthenticationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthenticationError";
+  }
+}
 const RECONNECT_INITIAL_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 const RECONNECT_MULTIPLIER = 2;
@@ -229,6 +237,15 @@ export class GatewayConnection {
                 direction: "service_to_gateway",
                 messageType: "auth_error",
               });
+              // A rejected token before the first successful auth is a
+              // configuration error: fail fast. After a successful session,
+              // keep retrying so token rotation can heal.
+              if (this.firstReadyReject) {
+                this.closed = true;
+                this.firstReadyReject(new AuthenticationError(msg.error));
+                this.firstReadyResolve = null;
+                this.firstReadyReject = null;
+              }
               ws.close();
               break;
             }
