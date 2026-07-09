@@ -342,8 +342,7 @@ describe("GatewayConnection", () => {
       error: "Invalid token",
     }));
 
-    // main.ts branches on instanceof AuthenticationError for fail-fast exit,
-    // so pin the class, not just the message.
+    // main.ts branches on the error class for fail-fast exit
     const err = await connectPromise.then(
       () => null,
       (e: unknown) => e

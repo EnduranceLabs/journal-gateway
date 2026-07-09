@@ -238,10 +238,8 @@ export class GatewayConnection {
                 messageType: "auth_error",
               });
               // A rejected token before the first successful auth is a
-              // configuration error — stop the reconnect loop and surface
-              // it to the caller instead of retrying a token that will
-              // never work. After a successful session, keep retrying so
-              // transient token rotation on the service side can heal.
+              // configuration error: fail fast. After a successful session,
+              // keep retrying so token rotation can heal.
               if (this.firstReadyReject) {
                 this.closed = true;
                 this.firstReadyReject(new AuthenticationError(msg.error));

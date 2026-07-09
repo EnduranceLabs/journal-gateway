@@ -29,14 +29,10 @@ export interface GatewayServerOptions {
    */
   getTraceContext?: () => TraceContext | null;
   /**
-   * Called when a gateway socket emits an `error` event (e.g. ECONNRESET,
-   * protocol violations). Wire this to logging/telemetry to diagnose
-   * connection problems. `gateway` is `null` if the socket errored before
-   * completing the handshake. The socket emits `close` afterwards, which
-   * runs normal cleanup — including `onGatewayDisconnected` if the gateway
-   * had connected (pre-handshake sockets have no gateway to disconnect).
-   * The library never logs on its own: when this callback is not provided,
-   * socket errors are dropped (the crash is still prevented either way).
+   * Called when a gateway socket emits an `error` event (e.g. ECONNRESET).
+   * `gateway` is `null` if the socket errored before completing the
+   * handshake. When not provided, socket errors are dropped — the library
+   * never logs on its own.
    */
   onSocketError?: (error: Error, gateway: ConnectedGateway | null) => void;
 }
@@ -655,15 +651,9 @@ export class GatewayServer {
       }
     });
 
-    // An "error" event with no listener crashes the host process. Surface the
-    // error to the host; the socket emits "close" afterwards, which runs the
-    // cleanup below.
+    // An "error" event with no listener crashes the host process.
     ws.on("error", (err: Error) => {
-      try {
-        this.options.onSocketError?.(err, this.gateways.get(connId)?.gateway ?? null);
-      } catch {
-        // This listener exists to prevent crashes; never let it throw.
-      }
+      this.options.onSocketError?.(err, this.gateways.get(connId)?.gateway ?? null);
     });
 
     ws.on("close", (code: number, reason: Buffer) => {
