@@ -33,7 +33,8 @@ export interface GatewayServerOptions {
    * protocol violations). Wire this to logging/telemetry to diagnose
    * connection problems. `gateway` is `null` if the socket errored before
    * completing the handshake. The socket emits `close` afterwards, which
-   * runs normal cleanup and fires `onGatewayDisconnected`.
+   * runs normal cleanup — including `onGatewayDisconnected` if the gateway
+   * had connected (pre-handshake sockets have no gateway to disconnect).
    * The library never logs on its own: when this callback is not provided,
    * socket errors are dropped (the crash is still prevented either way).
    */

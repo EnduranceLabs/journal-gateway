@@ -70,7 +70,8 @@ The library has no telemetry dependency of its own. Two options on
 - **`onSocketError(error, gateway | null)`** — called when a gateway socket
   emits an `error` event (e.g. `ECONNRESET`). `gateway` is `null` if the
   socket errored before completing the handshake. The socket closes
-  afterwards, firing `onGatewayDisconnected` as usual. The library never
+  afterwards; if the gateway had connected, `onGatewayDisconnected` fires as
+  usual (pre-handshake sockets have no gateway to disconnect). The library never
   writes to the console or anywhere else on its own — if you don't provide
   this callback, socket error details are dropped (the process is still
   protected from crashing either way), so bind it if you want visibility

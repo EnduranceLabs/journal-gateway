@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { GatewayConnection } from "../connection.js";
+import { GatewayConnection, AuthenticationError } from "../connection.js";
 import type { GatewayConfig, IntegrationProvider, GatewayVersions, Skill } from "@journal.one/gateway-protocol";
 import { EventEmitter } from "node:events";
 
@@ -342,7 +342,14 @@ describe("GatewayConnection", () => {
       error: "Invalid token",
     }));
 
-    await expect(connectPromise).rejects.toThrow("Invalid token");
+    // main.ts branches on instanceof AuthenticationError for fail-fast exit,
+    // so pin the class, not just the message.
+    const err = await connectPromise.then(
+      () => null,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(AuthenticationError);
+    expect((err as Error).message).toBe("Invalid token");
 
     // The loop must stop — no reconnect attempt after the ~1s backoff window
     await new Promise((r) => setTimeout(r, 1500));
