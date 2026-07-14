@@ -3,7 +3,7 @@ class JournalGateway < Formula
   homepage "https://github.com/journal/journal-edge"
   # url and sha256 are updated by packaging/homebrew/publish.sh
   url "https://registry.npmjs.org/@journal.one/gateway/-/gateway-0.7.0.tgz"
-  sha256 "PLACEHOLDER"
+  sha256 "5e495d9a9d1f00d925ac0be3806ba6cbf794966c49cc9734bdd02813e8ec0c97"
   license "MIT"
 
   depends_on "node@22"
