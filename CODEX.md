@@ -1,5 +1,8 @@
 # Codex Notes
 
+See [AGENTS.md](./AGENTS.md) for the operational contract (commands, conventions,
+lockstep versioning). Codex-specific preferences below.
+
 - Keep changes minimal and readable; favor clarity over cleverness.
 - Default to ASCII, concise comments, and explicit error handling.
 - Use `rg` for search; avoid destructive Git commands.

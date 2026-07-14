@@ -83,7 +83,7 @@ export class GatewayConnection {
     });
 
     // Drain any previous loop before starting a new one, preventing
-    // two concurrent reconnect loops from the close() → connect() race.
+    // two concurrent reconnect loops from the close() -> connect() race.
     this.loopPromise = (this.loopPromise ?? Promise.resolve()).then(() => {
       // If close() was called after connect() but before we got here,
       // firstReady will have been cleared — don't start a new loop.
@@ -446,7 +446,7 @@ export class GatewayConnection {
             .map((c) => c.text)
             .join("\n");
           const error = errorText.length > 1024
-            ? errorText.slice(0, 1024) + "…"
+            ? errorText.slice(0, 1024) + "..."
             : errorText || "tool returned isError with no text";
           return { kind: "tool_error", durationMs, error };
         }

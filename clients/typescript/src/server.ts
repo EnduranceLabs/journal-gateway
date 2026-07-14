@@ -581,7 +581,6 @@ export class GatewayServer {
 
             this.gateways.set(connId, entry);
 
-            // Auto-pull and then fire connected callback
             await this.autoPull(connId);
             this.onGatewayConnected?.(gateway);
           }

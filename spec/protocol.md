@@ -316,6 +316,8 @@ Sent to invoke a tool on a registered integration.
 | `integrationId` | `string` | yes | Target integration identifier |
 | `toolName` | `string` | yes | Tool name within the integration |
 | `arguments` | `object` | yes | Tool input arguments |
+| `traceparent` | `string` | no | W3C trace context; the gateway parents its tool-call span onto it |
+| `tracestate` | `string` | no | W3C trace state, sent only alongside `traceparent` |
 
 ```json
 {
@@ -323,9 +325,13 @@ Sent to invoke a tool on a registered integration.
   "requestId": "req_001",
   "integrationId": "postgresql",
   "toolName": "query",
-  "arguments": { "sql": "SELECT count(*) FROM users" }
+  "arguments": { "sql": "SELECT count(*) FROM users" },
+  "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
 }
 ```
+
+The client libraries populate `traceparent`/`tracestate` from their
+`getTraceContext` / `get_trace_context` hook when set.
 
 #### `ping`
 

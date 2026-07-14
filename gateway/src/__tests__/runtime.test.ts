@@ -23,8 +23,11 @@ vi.mock("../mcp-client.js", () => {
           inputSchema: { type: "object" },
         },
       ]);
+      const willFail = definition.id === "broken";
       const instance = {
-        start: vi.fn().mockResolvedValue(undefined),
+        start: willFail
+          ? vi.fn().mockRejectedValue(new Error("Connection closed"))
+          : vi.fn().mockResolvedValue(undefined),
         stop: vi.fn().mockResolvedValue(undefined),
         getTools,
         callTool: vi.fn().mockResolvedValue({
@@ -147,6 +150,20 @@ describe("Runtime", () => {
     const tools = await runtime.getTools();
     expect(tools).toHaveLength(1);
     expect(tools[0].id).toBe("test-db");
+  });
+
+  it("skips an integration that fails to start and keeps the healthy ones", async () => {
+    const broken: McpServerConfig = { ...testIntegration, id: "broken" };
+    const runtime = new Runtime(makeConfig([broken, testIntegration]));
+
+    await expect(runtime.start()).resolves.toBeUndefined();
+
+    const tools = await runtime.getTools();
+    expect(tools.map((t) => t.id)).toEqual(["test-db"]);
+
+    // The failed client is stopped (cleanup), the healthy one is not.
+    const brokenInstance = mcpClientInstances.find((i) => i.id === "broken");
+    expect(brokenInstance).toBeDefined();
   });
 
   it("generates tool integrations with tools", async () => {

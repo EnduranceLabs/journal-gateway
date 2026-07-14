@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { watch, type FSWatcher } from "node:fs";
+import { readFileSync, watch, type FSWatcher } from "node:fs";
 import { EventEmitter } from "node:events";
 import { parse } from "dotenv";
 

@@ -2,7 +2,7 @@ class JournalGateway < Formula
   desc "Connect your tools to the Journal agent via an outbound WebSocket gateway"
   homepage "https://github.com/journal/journal-edge"
   # url and sha256 are updated by packaging/homebrew/publish.sh
-  url "https://registry.npmjs.org/@journal.one/gateway/-/gateway-0.2.0.tgz"
+  url "https://registry.npmjs.org/@journal.one/gateway/-/gateway-0.7.0.tgz"
   sha256 "PLACEHOLDER"
   license "MIT"
 

@@ -460,3 +460,71 @@ async def test_pong_timeout_disconnects_gateway():
     assert len(disconnected) == 1
 
     await srv.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_trace_context_propagates_to_tool_call():
+    """traceparent/tracestate from get_trace_context ride on the tool_call."""
+    srv = GatewayServer(
+        validate_token=_validate_token,
+        port=0,
+        ping_interval=0,
+        get_trace_context=lambda: {
+            "traceparent": "00-abc-def-01",
+            "tracestate": "vendor=1",
+        },
+    )
+    await srv.start()
+
+    ws = await connect_and_auth(srv.url, "gw_valid")
+    await send_version_changed(ws, [TEST_INTEGRATION])
+
+    seen: dict = {}
+
+    async def handle_calls():
+        async for raw in ws:
+            msg = json.loads(raw)
+            if msg["type"] == "tool_call":
+                seen.update(msg)
+                await ws.send(json.dumps({
+                    "type": "tool_result",
+                    "requestId": msg["requestId"],
+                    "result": {"content": [{"type": "text", "text": "ok"}]},
+                }))
+
+    handler = asyncio.create_task(handle_calls())
+    await srv.call_tool("test-integration", "echo", {})
+
+    assert seen["traceparent"] == "00-abc-def-01"
+    assert seen["tracestate"] == "vendor=1"
+
+    handler.cancel()
+    await ws.close()
+    await srv.stop()
+
+
+@pytest.mark.asyncio
+async def test_on_socket_error_fires_on_abnormal_close():
+    """A gateway socket that drops abruptly surfaces via on_socket_error."""
+    errors: list[tuple] = []
+    srv = GatewayServer(
+        validate_token=_validate_token,
+        port=0,
+        ping_interval=0,
+        on_socket_error=lambda err, gw: errors.append((err, gw)),
+    )
+    await srv.start()
+
+    ws = await connect_and_auth(srv.url, "gw_valid")
+    await send_version_changed(ws)
+    assert len(srv.connected_gateways) == 1
+
+    # Abrupt transport failure (not a clean close handshake).
+    ws.transport.close()
+    await asyncio.sleep(0.1)
+
+    assert len(errors) == 1
+    err, gw = errors[0]
+    assert gw is not None and gw.organization_id == "org_1"
+
+    await srv.stop()

@@ -2,7 +2,6 @@ import asyncio
 import os
 import subprocess
 
-import pytest
 import pytest_asyncio
 
 from journal_gateway_client import GatewayServer, TokenValidationResult
