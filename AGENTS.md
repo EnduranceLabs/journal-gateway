@@ -4,7 +4,7 @@ Start here if you're a coding agent working in this repo.
 
 ## What this is
 
-Journal Edge connects a customer's own tools to [Journal](https://journal.one). It is
+Journal Gateway connects a customer's own tools to [Journal](https://journal.one). It is
 two sides of one WebSocket protocol:
 
 - **Gateway** (`gateway/`) — runs inside the customer's network, connects *outbound* to

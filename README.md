@@ -89,7 +89,7 @@ autocomplete and validation:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/EnduranceLabs/journal-edge/main/spec/gateway-config.schema.json",
+  "$schema": "https://raw.githubusercontent.com/EnduranceLabs/journal-gateway/main/spec/gateway-config.schema.json",
   "mcpServers": []
 }
 ```

@@ -38,7 +38,7 @@ The gateway watches the config file and `.env` file for changes at runtime — a
 
 Startup is resilient: if one MCP server fails to start (bad command, unreachable URL), it is logged and skipped — the gateway still connects and serves the healthy servers and skills.
 
-Run `journal-gateway --help` for all flags (`--config`, `--env-file`, `--version`), or see the sample config and client examples in [`examples/`](https://github.com/EnduranceLabs/journal-edge/tree/main/examples). A JSON Schema for the config file is published at [`spec/gateway-config.schema.json`](https://github.com/EnduranceLabs/journal-edge/blob/main/spec/gateway-config.schema.json) — reference it with `$schema` for editor autocomplete.
+Run `journal-gateway --help` for all flags (`--config`, `--env-file`, `--version`), or see the sample config and client examples in [`examples/`](https://github.com/EnduranceLabs/journal-gateway/tree/main/examples). A JSON Schema for the config file is published at [`spec/gateway-config.schema.json`](https://github.com/EnduranceLabs/journal-gateway/blob/main/spec/gateway-config.schema.json) — reference it with `$schema` for editor autocomplete.
 
 ## Transports
 
@@ -50,7 +50,7 @@ MCP servers can connect via three transports:
 
 ## Full documentation
 
-See the [root README](https://github.com/EnduranceLabs/journal-edge#readme) for the complete configuration reference, environment variables, protocol details, and Docker usage.
+See the [root README](https://github.com/EnduranceLabs/journal-gateway#readme) for the complete configuration reference, environment variables, protocol details, and Docker usage.
 
 ## License
 

@@ -100,7 +100,7 @@ server = GatewayServer(
 
 ## Full documentation
 
-See the [root README](https://github.com/EnduranceLabs/journal-edge#readme) for protocol details, gateway configuration, and architecture.
+See the [root README](https://github.com/EnduranceLabs/journal-gateway#readme) for protocol details, gateway configuration, and architecture.
 
 ## License
 
