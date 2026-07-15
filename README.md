@@ -31,15 +31,30 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
 
 ### Docker
 
+Try it (foreground). Put `JOURNAL_GATEWAY_TOKEN=gw_your_token` in a `.env` file next to
+your `gateway.json`:
+
 ```bash
 docker run --rm \
-  -e JOURNAL_GATEWAY_TOKEN=gw_your_token \
   -v "$(pwd)/gateway.json:/etc/journal/gateway.json:ro" \
+  --env-file .env \
   ghcr.io/endurancelabs/journal-gateway:latest --config /etc/journal/gateway.json
 ```
 
-The image has an `ENTRYPOINT` of `journal-gateway`, so flags (`--config`, `--env-file`,
-`--version`) go straight after the image name. Pass secrets with `-e` or `--env-file .env`.
+Run it as a service (detached, restarts on reboot/crash):
+
+```bash
+docker run -d --name journal-gateway --restart unless-stopped \
+  -v /etc/journal/gateway.json:/etc/journal/gateway.json:ro \
+  --env-file /etc/journal/gateway.env \
+  ghcr.io/endurancelabs/journal-gateway:latest --config /etc/journal/gateway.json
+```
+
+The image's `ENTRYPOINT` is the gateway, so flags (`--config`, `--env-file`, `--version`)
+go straight after the image name. Pass secrets with `--env-file` or `-e`; the token never
+needs to be baked into the image. Config hot-reload over a bind mount is reliable on Linux
+hosts but not on Docker Desktop (macOS/Windows) — restart the container after config edits
+there.
 
 ### Example config file (`gateway.json`)
 
