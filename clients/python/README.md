@@ -7,7 +7,7 @@ in the service that accepts gateway WebSocket connections, validates gateway
 tokens, receives tool and skill catalogs, and calls tools on connected gateways.
 
 If you want to run the customer-side gateway process, install the npm package
-`@journal.one/gateway` instead.
+`journal-gateway` instead.
 
 ## Install
 
@@ -137,16 +137,16 @@ is sent to the gateway and used as the parent for remote tool execution spans.
 
 Journal Gateway packages release in lockstep. Use matching versions of:
 
-- `journal-gateway-client`
-- `@journal.one/gateway`
-- `@journal.one/gateway-client`
-- `@journal.one/gateway-protocol`
+- npm `journal-gateway`
+- npm `journal-gateway-client` for TypeScript services
+- npm `journal-gateway-protocol`
+- PyPI `journal-gateway-client` for Python services
 
 ## More Documentation
 
 - [Full README](https://github.com/EnduranceLabs/journal-gateway#readme)
 - [Protocol spec](https://github.com/EnduranceLabs/journal-gateway/blob/main/spec/protocol.md)
-- [Gateway npm package](https://www.npmjs.com/package/@journal.one/gateway)
+- [Gateway npm package](https://www.npmjs.com/package/journal-gateway)
 
 ## License
 

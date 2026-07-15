@@ -24,7 +24,7 @@ Connect your data sources to [Journal](https://journal.one). The gateway runs in
 ### npm
 
 ```bash
-npm install -g @journal.one/gateway
+npm install -g journal-gateway
 
 JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
 ```
@@ -90,7 +90,7 @@ there.
 
 MCP server packages in examples are external runtime commands. They are resolved
 by `npx` when the gateway starts and are not bundled with, or installed by,
-`@journal.one/gateway`.
+`journal-gateway`.
 
 Set every environment variable referenced by `envVars` or `headers` before
 starting the gateway. For the config above, that means `POSTGRES_*` and

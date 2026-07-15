@@ -1,8 +1,25 @@
 {
-  "name": "@journal.one/gateway-protocol",
+  "name": "journal-gateway-protocol",
   "version": "0.8.0",
+  "description": "Shared TypeScript types and Zod schemas for the Journal Gateway protocol",
   "license": "MIT",
   "type": "module",
+  "keywords": [
+    "journal",
+    "journal-gateway",
+    "protocol",
+    "zod",
+    "websocket"
+  ],
+  "homepage": "https://github.com/EnduranceLabs/journal-gateway#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EnduranceLabs/journal-gateway.git",
+    "directory": "protocol"
+  },
+  "bugs": {
+    "url": "https://github.com/EnduranceLabs/journal-gateway/issues"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": ["dist"],

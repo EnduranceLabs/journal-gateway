@@ -1,8 +1,25 @@
 {
-  "name": "@journal.one/gateway-client",
+  "name": "journal-gateway-client",
   "version": "0.8.0",
+  "description": "TypeScript service-side client for accepting Journal Gateway connections",
   "license": "MIT",
   "type": "module",
+  "keywords": [
+    "journal",
+    "journal-gateway",
+    "mcp",
+    "model-context-protocol",
+    "websocket"
+  ],
+  "homepage": "https://github.com/EnduranceLabs/journal-gateway#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EnduranceLabs/journal-gateway.git",
+    "directory": "clients/typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/EnduranceLabs/journal-gateway/issues"
+  },
   "main": "./dist/server.js",
   "types": "./dist/server.d.ts",
   "files": ["dist"],
@@ -18,7 +35,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@journal.one/gateway-protocol": "workspace:*",
+    "journal-gateway-protocol": "workspace:*",
     "ws": "^8",
     "zod": "^3.24"
   },

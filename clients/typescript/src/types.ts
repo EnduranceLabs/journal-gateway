@@ -15,7 +15,7 @@ export type {
   SkillsMessage,
   GatewayVersions,
   ServiceMessage,
-} from "@journal.one/gateway-protocol";
+} from "journal-gateway-protocol";
 
 export {
   GatewayMessageSchema,
@@ -26,4 +26,4 @@ export {
   ServiceMessageSchema,
   IntegrationSchema,
   ToolResultSchema,
-} from "@journal.one/gateway-protocol";
+} from "journal-gateway-protocol";

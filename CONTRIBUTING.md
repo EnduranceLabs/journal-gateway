@@ -26,17 +26,21 @@ pnpm test:client
 # Run integration tests (requires gateway to be built)
 pnpm test:integration
 
-# Run Python client tests (creates the venv on first run)
+# Run Python client tests (creates the venv on first run; set PYTHON=/path/to/python3.11 if needed)
 pnpm test:python
 
 # Run every test suite
 pnpm test:all
 ```
 
+If your default `python3` is older than 3.11, prefix Python-dependent commands
+with `PYTHON=/path/to/python3.11`, for example
+`PYTHON=/opt/homebrew/bin/python3.12 pnpm test:all`.
+
 ## Architecture
 
 ```
-protocol/                   # @journal.one/gateway-protocol (shared Zod schemas + TS types)
+protocol/                   # journal-gateway-protocol (shared Zod schemas + TS types)
 gateway/                    # Gateway process (connects outbound to service)
   src/
     common/                 # Shared utilities (logger)
@@ -50,7 +54,7 @@ gateway/                    # Gateway process (connects outbound to service)
     config.ts               # Configuration parsing + resolution helpers
     main.ts                 # CLI entry point (.env auto-detection)
 clients/
-  typescript/               # @journal.one/gateway-client npm package
+  typescript/               # journal-gateway-client npm package
   python/                   # journal-gateway-client PyPI package
 testing/
   integration/              # End-to-end tests (real gateway <-> client library)
@@ -76,10 +80,10 @@ Agents that want to accept gateway connections and call tools through them can u
 +-------------+        +------------------+        +-----------+
 ```
 
-### TypeScript (`@journal.one/gateway-client`)
+### TypeScript (`journal-gateway-client`)
 
 ```typescript
-import { GatewayServer } from "@journal.one/gateway-client";
+import { GatewayServer } from "journal-gateway-client";
 
 const server = new GatewayServer({
   port: 8080,
@@ -129,8 +133,9 @@ The gateway communicates with Journal over WebSocket using a simple JSON protoco
 
 ## Packaging
 
-All four packages (`gateway-protocol`, `gateway`, `gateway-client`, and the Python
-`journal-gateway-client`) release in lockstep at the same version. Bump them together
+All four packages (`journal-gateway-protocol`, `journal-gateway`, the npm
+`journal-gateway-client`, and the PyPI `journal-gateway-client`) release in
+lockstep at the same version. Bump them together
 with `packaging/bump-version.sh` — never edit versions by hand. See
 [packaging/npm/README.md](./packaging/npm/README.md) for the full release runbook
 (npm, PyPI, Homebrew, and Docker).

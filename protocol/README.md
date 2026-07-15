@@ -1,17 +1,17 @@
-# @journal.one/gateway-protocol
+# journal-gateway-protocol
 
 Shared TypeScript types and [Zod](https://zod.dev) schemas for the Journal
 Gateway WebSocket protocol.
 
-Most applications should install `@journal.one/gateway` or
-`@journal.one/gateway-client` instead. Install this package directly when you
+Most applications should install `journal-gateway` or
+`journal-gateway-client` instead. Install this package directly when you
 need to validate protocol messages, share gateway types across packages, or
 build custom tooling around the protocol.
 
 ## Install
 
 ```bash
-npm install @journal.one/gateway-protocol
+npm install journal-gateway-protocol
 ```
 
 ## Exports
@@ -34,7 +34,7 @@ import {
   ServiceMessageSchema,
   type GatewayMessage,
   type ToolResult,
-} from "@journal.one/gateway-protocol";
+} from "journal-gateway-protocol";
 
 export function parseGatewayMessage(raw: string): GatewayMessage {
   return GatewayMessageSchema.parse(JSON.parse(raw));
@@ -55,10 +55,10 @@ ServiceMessageSchema.parse({
 
 Journal Gateway packages release in lockstep. Use matching versions of:
 
-- `@journal.one/gateway`
-- `@journal.one/gateway-client`
-- `@journal.one/gateway-protocol`
-- `journal-gateway-client` for Python services
+- npm `journal-gateway`
+- npm `journal-gateway-client` for TypeScript services
+- npm `journal-gateway-protocol`
+- PyPI `journal-gateway-client` for Python services
 
 ## More Documentation
 

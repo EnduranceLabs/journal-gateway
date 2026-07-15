@@ -7,7 +7,7 @@ Runnable starting points for the two sides of the Journal Gateway protocol.
 | [`gateway.json`](./gateway.json) | Sample gateway config (stdio + streamable-http servers, a skills dir). The `$schema` line gives you autocomplete and validation in editors like VS Code. |
 | [`gateway.env.example`](./gateway.env.example) | Environment variables required by `gateway.json`. |
 | [`integrations/`](./integrations) | Customer-facing MCP integration examples, including SQL database configs and a curated enterprise MCP server catalog. |
-| [`client-server.ts`](./client-server.ts) | Minimal service-side server using `@journal.one/gateway-client`. |
+| [`client-server.ts`](./client-server.ts) | Minimal service-side server using `journal-gateway-client`. |
 | [`client_server.py`](./client_server.py) | The same, using `journal-gateway-client`. |
 
 ## Try it end to end
@@ -16,7 +16,7 @@ Runnable starting points for the two sides of the Journal Gateway protocol.
 
    ```bash
    # TypeScript
-   npm install @journal.one/gateway-client
+   npm install journal-gateway-client
    npx tsx client-server.ts
 
    # or Python
@@ -30,7 +30,7 @@ Runnable starting points for the two sides of the Journal Gateway protocol.
    database/API values for your environment, then:
 
    ```bash
-   npm install -g @journal.one/gateway
+   npm install -g journal-gateway
 
    journal-gateway --env-file .env --config gateway.json
    ```

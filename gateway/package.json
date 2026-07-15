@@ -1,8 +1,25 @@
 {
-  "name": "@journal.one/gateway",
+  "name": "journal-gateway",
   "version": "0.8.0",
+  "description": "Outbound gateway for connecting MCP servers and skills to Journal",
   "license": "MIT",
   "type": "module",
+  "keywords": [
+    "journal",
+    "journal-gateway",
+    "mcp",
+    "model-context-protocol",
+    "gateway"
+  ],
+  "homepage": "https://github.com/EnduranceLabs/journal-gateway#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EnduranceLabs/journal-gateway.git",
+    "directory": "gateway"
+  },
+  "bugs": {
+    "url": "https://github.com/EnduranceLabs/journal-gateway/issues"
+  },
   "main": "./dist/main.js",
   "types": "./dist/main.d.ts",
   "files": [
@@ -26,7 +43,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@journal.one/gateway-protocol": "workspace:*",
+    "journal-gateway-protocol": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.56.0",

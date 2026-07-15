@@ -1,6 +1,6 @@
 // Minimal Journal Gateway client server (TypeScript).
 //
-//   npm install @journal.one/gateway-client
+//   npm install journal-gateway-client
 //   npx tsx client-server.ts
 //
 // Then point a gateway at ws://localhost:8080 with token "gw_demo":
@@ -8,7 +8,7 @@
 //   JOURNAL_GATEWAY_URL=ws://localhost:8080 \
 //   journal-gateway --config gateway.json
 
-import { GatewayServer } from "@journal.one/gateway-client";
+import { GatewayServer } from "journal-gateway-client";
 
 const server = new GatewayServer({
   port: 8080,
