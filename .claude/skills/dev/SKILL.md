@@ -21,22 +21,28 @@ pnpm typecheck   # TypeScript type checking
 ```
 gateway/
   src/
-    types/              # Zod schemas, TypeScript types, protocol definitions
     common/             # Shared utilities (logger)
     connection.ts       # WebSocket connection to Journal service
     runtime.ts          # MCP + skills runtime (IntegrationProvider) with config hot-reload
-    mcp-client.ts       # MCP server subprocess wrapper
+    mcp-client.ts       # MCP server transport wrapper (stdio, SSE, streamable-http)
     skill-client.ts     # Skill file loader
     config-watcher.ts   # Config file watcher (fs.watch + debounce)
     env-file.ts         # .env file loader + watcher (dotenv)
     config.ts           # Configuration parsing + resolution helpers
     main.ts             # CLI entry point (.env auto-detection)
     __tests__/          # All tests
+protocol/
+  src/
+    messages.ts         # Protocol message schemas and types
+    integrations.ts     # Integration, tool, and content schemas
+    skills.ts           # Skill schema
+    errors.ts           # Gateway error schemas
+    provider.ts         # IntegrationProvider and gateway config types
 ```
 
 ## Key Source Files
 
-### `gateway/src/types/`
+### `protocol/src/`
 
 Protocol types defined with Zod schemas:
 - `errors.ts` — `GatewayError`, error code enum (`INTEGRATION_NOT_FOUND`, `TOOL_NOT_FOUND`, `EXECUTION_FAILED`, `TIMEOUT`)
@@ -54,7 +60,7 @@ Protocol types defined with Zod schemas:
 - `config.ts` — `McpServerConfig` interface, `parseConfig`, `readConfigFile`, `resolveConfigFile`, `resolveConfigFilePath` with Zod validation
 - `config-watcher.ts` — Watches config file with `fs.watch` + 500ms debounce, emits `config_changed`
 - `env-file.ts` — Loads and watches `.env` files using `dotenv.parse()`, emits `env_changed`
-- `mcp-client.ts` — Spawns MCP server subprocesses via `@modelcontextprotocol/sdk`
+- `mcp-client.ts` — Starts or connects to MCP servers via `@modelcontextprotocol/sdk` transports
 - `runtime.ts` — `Runtime` implements `IntegrationProvider` (manages MCP clients + skills), supports hot-reload of config and env files
 - `skill-client.ts` — Loads raw Markdown files as skills
 - `main.ts` — CLI entry point with `.env` auto-detection (`--env-file`, `JOURNAL_GATEWAY_ENV_FILE`, or `.env` in cwd)

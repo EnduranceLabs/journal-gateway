@@ -64,10 +64,16 @@ there.
     {
       "id": "postgresql",
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "args": ["-y", "@toolbox-sdk/server", "--prebuilt", "postgres", "--stdio"],
       "name": "PostgreSQL",
-      "description": "Query databases",
-      "envVars": { "DATABASE_URL": "DATABASE_URL" }
+      "description": "Query a PostgreSQL database",
+      "envVars": {
+        "POSTGRES_HOST": "POSTGRES_HOST",
+        "POSTGRES_PORT": "POSTGRES_PORT",
+        "POSTGRES_DATABASE": "POSTGRES_DATABASE",
+        "POSTGRES_USER": "POSTGRES_USER",
+        "POSTGRES_PASSWORD": "POSTGRES_PASSWORD"
+      }
     },
     {
       "id": "remote-api",
@@ -75,15 +81,24 @@ there.
       "url": "https://mcp.example.com/mcp",
       "name": "Remote API",
       "description": "Remote MCP server",
-      "headers": { "Authorization": "API_KEY" }
+      "headers": { "Authorization": "REMOTE_MCP_AUTHORIZATION" }
     }
   ],
   "skillsDir": "/opt/journal/skills"
 }
 ```
 
+MCP server packages in examples are external runtime commands. They are resolved
+by `npx` when the gateway starts and are not bundled with, or installed by,
+`@journal.one/gateway`.
+
+Set every environment variable referenced by `envVars` or `headers` before
+starting the gateway. For the config above, that means `POSTGRES_*` and
+`REMOTE_MCP_AUTHORIZATION` in addition to `JOURNAL_GATEWAY_TOKEN`.
+
 Runnable examples (this config plus minimal TS and Python client servers) live in
-[`examples/`](./examples). Add a `"$schema"` field pointing at
+[`examples/`](./examples). Database and enterprise integration examples live in
+[`examples/integrations/`](./examples/integrations). Add a `"$schema"` field pointing at
 [`spec/gateway-config.schema.json`](./spec/gateway-config.schema.json) for editor
 autocomplete and validation:
 

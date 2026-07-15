@@ -34,7 +34,7 @@ async def main() -> None:
     await server.start()
 
     # Call a tool on a connected gateway
-    result = await server.call_tool("postgresql", "query", {"sql": "SELECT 1"})
+    result = await server.call_tool("postgresql", "execute_sql", {"sql": "SELECT 1"})
     print(result.content)
 
     await server.stop()

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EnduranceLabs/journal-gateway/main/spec/gateway-config.schema.json",
+  "mcpServers": [
+    {
+      "id": "snowflake",
+      "name": "Snowflake",
+      "description": "Snowflake access through Google MCP Toolbox for Databases. Use a dedicated role scoped to the warehouse, database, schema, and objects Journal should read.",
+      "command": "npx",
+      "args": ["-y", "@toolbox-sdk/server", "--prebuilt", "snowflake", "--stdio"],
+      "envVars": {
+        "SNOWFLAKE_ACCOUNT": "SNOWFLAKE_ACCOUNT",
+        "SNOWFLAKE_USER": "SNOWFLAKE_USER",
+        "SNOWFLAKE_PASSWORD": "SNOWFLAKE_PASSWORD",
+        "SNOWFLAKE_DATABASE": "SNOWFLAKE_DATABASE",
+        "SNOWFLAKE_SCHEMA": "SNOWFLAKE_SCHEMA",
+        "SNOWFLAKE_WAREHOUSE": "SNOWFLAKE_WAREHOUSE",
+        "SNOWFLAKE_ROLE": "SNOWFLAKE_ROLE"
+      }
+    }
+  ]
+}

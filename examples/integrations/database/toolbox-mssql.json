@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EnduranceLabs/journal-gateway/main/spec/gateway-config.schema.json",
+  "mcpServers": [
+    {
+      "id": "mssql",
+      "name": "Microsoft SQL Server",
+      "description": "Microsoft SQL Server access through Google MCP Toolbox for Databases. Use a dedicated read-only or restricted database role.",
+      "command": "npx",
+      "args": ["-y", "@toolbox-sdk/server", "--prebuilt", "mssql", "--stdio"],
+      "envVars": {
+        "MSSQL_HOST": "MSSQL_HOST",
+        "MSSQL_PORT": "MSSQL_PORT",
+        "MSSQL_DATABASE": "MSSQL_DATABASE",
+        "MSSQL_USER": "MSSQL_USER",
+        "MSSQL_PASSWORD": "MSSQL_PASSWORD"
+      }
+    }
+  ]
+}
