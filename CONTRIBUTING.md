@@ -2,7 +2,7 @@
 
 ## Development
 
-Prerequisites: Node.js 22+, pnpm, Python 3.10+ (for Python client).
+Prerequisites: Node.js 22+, pnpm, Python 3.11+ (for Python client).
 
 ```bash
 # Install dependencies

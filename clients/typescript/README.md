@@ -1,14 +1,22 @@
 # @journal.one/gateway-client
 
-TypeScript client library for the Journal Gateway protocol. Runs a WebSocket server that gateways connect to, authenticates them, auto-pulls their tools and skills, and lets you call tools.
+TypeScript service-side library for the Journal Gateway protocol. Use this
+package in the service that accepts gateway WebSocket connections, validates
+gateway tokens, receives tool and skill catalogs, and calls tools on connected
+gateways.
+
+If you want to run the customer-side gateway process, install
+`@journal.one/gateway` instead.
 
 ## Install
+
+Requires Node.js 22 or newer.
 
 ```bash
 npm install @journal.one/gateway-client
 ```
 
-## Usage
+## Quick Start
 
 ```ts
 import { GatewayServer } from "@journal.one/gateway-client";
@@ -16,74 +24,79 @@ import { GatewayServer } from "@journal.one/gateway-client";
 const server = new GatewayServer({
   port: 8080,
   validateToken: async (token) => {
-    // Return { organizationId } on success, null on failure
-    if (token === "gw_valid") return { organizationId: "org_123" };
+    if (token === process.env.JOURNAL_GATEWAY_TOKEN) {
+      return { organizationId: "org_123" };
+    }
     return null;
   },
 });
 
 server.onGatewayConnected = (gateway) => {
-  console.log("Gateway connected:", gateway.id);
-  console.log("Tools:", gateway.integrations);
+  console.info("gateway connected", {
+    gatewayId: gateway.id,
+    organizationId: gateway.organizationId,
+    integrations: gateway.integrations.length,
+  });
 };
 
 server.onGatewayUpdated = (gateway) => {
-  console.log("Gateway tools/skills changed:", gateway.id);
+  console.info("gateway catalog updated", { gatewayId: gateway.id });
 };
 
-server.onGatewayDisconnected = (gateway) => {
-  console.log("Gateway disconnected:", gateway.id);
+server.onGatewayDisconnected = (gateway, closeCode, closeReason) => {
+  console.info("gateway disconnected", {
+    gatewayId: gateway.id,
+    closeCode,
+    closeReason,
+  });
 };
 
 await server.start();
 
-// Call a tool on a connected gateway
-const result = await server.callTool("postgresql", "execute_sql", {
-  sql: "SELECT 1",
-});
+// After a gateway for org_123 connects and publishes the postgresql integration:
+const result = await server.callToolForOrg(
+  "org_123",
+  "postgresql",
+  "execute_sql",
+  { sql: "SELECT 1" },
+);
 ```
+
+The library never writes logs or metrics by itself. Route callbacks into your
+own logger, metrics, and tracing stack.
 
 ## Key APIs
 
-- **`start()` / `stop()`** — lifecycle
-- **`callTool(integrationId, toolName, args)`** — execute a tool call on any gateway that provides the integration
-- **`callToolForOrg(orgId, integrationId, toolName, args)`** — same, scoped to an organization with automatic load balancing
-- **`getToolsForOrg(orgId)`** — list deduplicated tools across all gateways for an org
-- **`connectedGateways`** — all currently connected gateways
+- `start()` / `stop()`: start or stop the built-in WebSocket server.
+- `startHeartbeat()` / `handleConnection(ws)`: use your own HTTP/WebSocket
+  server and pass accepted sockets to the client library.
+- `callTool(integrationId, toolName, args, timeoutMs?)`: call a tool on any
+  connected gateway that exposes the integration.
+- `callToolForOrg(orgId, integrationId, toolName, args, timeoutMs?)`: call a
+  tool for one organization, with candidate gateway selection and retry on
+  connection-level failure.
+- `getToolsForOrg(orgId)`: list deduplicated tools for an organization.
+- `connectedGateways`: inspect currently connected gateways.
 
 ## Callbacks
 
-- **`onGatewayConnected`** — fired after a gateway authenticates and its initial tools/skills are pulled
-- **`onGatewayUpdated`** — fired when a gateway's tools or skills change at runtime
-- **`onGatewayDisconnected(gateway, closeCode?, closeReason?)`** — fired when a gateway disconnects
+- `onGatewayConnected(gateway)`: fired after authentication and initial catalog
+  pull.
+- `onGatewayUpdated(gateway)`: fired when MCP tools or skills change.
+- `onGatewayDisconnected(gateway, closeCode?, closeReason?)`: fired after a
+  connected gateway disconnects.
+- `onSocketError(error, gateway | null)`: optional constructor callback for
+  socket-level errors such as connection resets.
 
-## Telemetry
+## Trace Propagation
 
-The library has no telemetry dependency of its own. Two options on
-`GatewayServerOptions` let you wire it into your logging/tracing stack:
-
-- **`getTraceContext()`** — called on every `callTool`. Return the active
-  W3C trace context (`{ traceparent, tracestate? }`) and it is propagated on
-  the `tool_call` message; the gateway parents its `gateway.tool_call` span
-  onto it, so the remote tool execution appears in your distributed trace.
-  Return `null` when there is no active span.
-- **`onSocketError(error, gateway | null)`** — called when a gateway socket
-  emits an `error` event (e.g. `ECONNRESET`). `gateway` is `null` if the
-  socket errored before completing the handshake. The socket closes
-  afterwards; if the gateway had connected, `onGatewayDisconnected` fires as
-  usual (pre-handshake sockets have no gateway to disconnect). The library never
-  writes to the console or anywhere else on its own — if you don't provide
-  this callback, socket error details are dropped (the process is still
-  protected from crashing either way), so bind it if you want visibility
-  into connection-level failures.
-
-Example wiring with OpenTelemetry and a structured logger:
+Pass `getTraceContext` when you want Journal Gateway tool execution to attach to
+your active distributed trace:
 
 ```ts
 import { context, propagation } from "@opentelemetry/api";
 
 const server = new GatewayServer({
-  port: 8080,
   validateToken,
   getTraceContext: () => {
     const carrier: Record<string, string> = {};
@@ -98,9 +111,14 @@ const server = new GatewayServer({
 });
 ```
 
-## Full documentation
+`getTraceContext` is called for each tool call. The returned W3C trace context is
+sent to the gateway and used as the parent for remote tool execution spans.
 
-See the [root README](https://github.com/EnduranceLabs/journal-gateway#readme) for protocol details, gateway configuration, and architecture.
+## More Documentation
+
+- [Full README](https://github.com/EnduranceLabs/journal-gateway#readme)
+- [Protocol spec](https://github.com/EnduranceLabs/journal-gateway/blob/main/spec/protocol.md)
+- [Gateway package](https://www.npmjs.com/package/@journal.one/gateway)
 
 ## License
 

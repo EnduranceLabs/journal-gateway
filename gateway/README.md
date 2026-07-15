@@ -1,25 +1,44 @@
 # @journal.one/gateway
 
-The Journal Gateway connects MCP servers and skills running in your network to [Journal](https://journal.one). It connects outbound — your credentials never leave your infrastructure and you don't need to open any inbound ports.
+Journal Gateway runs inside your network and connects your MCP servers and skill
+files to [Journal](https://journal.one). It opens an outbound WebSocket to
+Journal, so credentials stay in your infrastructure and you do not need to open
+inbound ports.
+
+## What It Does
+
+- Starts local MCP servers over `stdio`.
+- Connects to remote MCP servers over `sse` or `streamable-http`.
+- Publishes available MCP tools and local skill files to Journal.
+- Watches config and env files so tools can be added or removed without a
+  restart.
+- Keeps running when one MCP server fails to start. The failing server is logged
+  and skipped while healthy servers remain available.
 
 ## Install
 
+Requires Node.js 22 or newer.
+
 ```bash
 npm install -g @journal.one/gateway
+journal-gateway --version
 ```
 
-## Quick start
+## Quick Start
 
-Create a config file (`gateway.json`):
+Create `gateway.json`:
 
 ```json
 {
+  "$schema": "https://raw.githubusercontent.com/EnduranceLabs/journal-gateway/main/spec/gateway-config.schema.json",
   "mcpServers": [
     {
       "id": "postgresql",
+      "name": "PostgreSQL",
+      "description": "Read-only PostgreSQL tools",
+      "transport": "stdio",
       "command": "npx",
       "args": ["-y", "@toolbox-sdk/server", "--prebuilt", "postgres", "--stdio"],
-      "name": "PostgreSQL",
       "envVars": {
         "POSTGRES_HOST": "POSTGRES_HOST",
         "POSTGRES_PORT": "POSTGRES_PORT",
@@ -32,41 +51,70 @@ Create a config file (`gateway.json`):
 }
 ```
 
-MCP server packages in examples are external runtime commands. They are resolved
-by `npx` when the gateway starts and are not bundled with, or installed by,
-`@journal.one/gateway`.
+Create `.env`:
+
+```bash
+JOURNAL_GATEWAY_TOKEN=gw_your_token
+POSTGRES_HOST=db.internal.example.com
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=analytics
+POSTGRES_USER=journal_gateway_ro
+POSTGRES_PASSWORD=replace-me
+```
 
 Run the gateway:
 
 ```bash
-JOURNAL_GATEWAY_TOKEN=gw_your_token \
-POSTGRES_HOST=db.internal.example.com \
-POSTGRES_PORT=5432 \
-POSTGRES_DATABASE=analytics \
-POSTGRES_USER=journal_gateway_ro \
-POSTGRES_PASSWORD='replace-me' \
-journal-gateway --config gateway.json
+journal-gateway --env-file .env --config gateway.json
 ```
 
-The gateway authenticates, announces its tools, and waits for requests from Journal. MCP servers are started on demand and their tools are made available automatically.
+The example MCP server package is an external runtime command. It is resolved by
+`npx` when the gateway starts. It is not bundled with, or installed by,
+`@journal.one/gateway`.
 
-The gateway watches the config file and `.env` file for changes at runtime — add, remove, or modify MCP servers without restarting.
+## Configuration
 
-Startup is resilient: if one MCP server fails to start (bad command, unreachable URL), it is logged and skipped — the gateway still connects and serves the healthy servers and skills.
+Each entry in `mcpServers` describes one integration. Supported transports:
 
-Run `journal-gateway --help` for all flags (`--config`, `--env-file`, `--version`), or see the sample config, client examples, and integration examples in [`examples/`](https://github.com/EnduranceLabs/journal-gateway/tree/main/examples). A JSON Schema for the config file is published at [`spec/gateway-config.schema.json`](https://github.com/EnduranceLabs/journal-gateway/blob/main/spec/gateway-config.schema.json) — reference it with `$schema` for editor autocomplete.
+- `stdio`: starts a local subprocess with `command` and `args`.
+- `sse`: connects to a legacy remote MCP server URL.
+- `streamable-http`: connects to a remote MCP server using the current MCP HTTP
+  transport.
 
-## Transports
+Use `envVars` to map environment variables from the gateway process into the MCP
+server. Do not put credentials directly in `gateway.json`.
 
-MCP servers can connect via three transports:
+For database integrations, create a read-only or restricted database role before
+connecting an MCP server. See the database guide for PostgreSQL, MySQL, SQL
+Server, and Snowflake examples:
+[examples/integrations/database](https://github.com/EnduranceLabs/journal-gateway/tree/main/examples/integrations/database).
 
-- **`stdio`** (default) — local subprocess (`command` + `args`)
-- **`sse`** — legacy SSE-based remote servers
-- **`streamable-http`** — current MCP spec recommendation for remote servers
+## Skills
 
-## Full documentation
+Set `skillsDir` in `gateway.json` to publish markdown skill files alongside MCP
+tools:
 
-See the [root README](https://github.com/EnduranceLabs/journal-gateway#readme) for the complete configuration reference, environment variables, protocol details, and Docker usage.
+```json
+{
+  "skillsDir": "./skills",
+  "mcpServers": []
+}
+```
+
+## Security Notes
+
+- Keep gateway tokens and integration credentials in environment variables or a
+  secret manager.
+- Prefer read-only database users and narrow service accounts for MCP servers.
+- Run the gateway close to the systems it integrates with. It only needs
+  outbound network access to Journal and to the MCP servers it starts or calls.
+
+## More Documentation
+
+- [Full README](https://github.com/EnduranceLabs/journal-gateway#readme)
+- [Example configs](https://github.com/EnduranceLabs/journal-gateway/tree/main/examples)
+- [Common MCP servers](https://github.com/EnduranceLabs/journal-gateway/blob/main/examples/integrations/common-mcp-servers.md)
+- [Config JSON Schema](https://github.com/EnduranceLabs/journal-gateway/blob/main/spec/gateway-config.schema.json)
 
 ## License
 

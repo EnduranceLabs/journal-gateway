@@ -3,10 +3,10 @@
 Internal guide for releasing the Journal Gateway packages.
 
 All packages release in **lockstep** — the same version number every time, so a
-customer can trust that `@journal.one/gateway` 0.7.0, `@journal.one/gateway-client`
-0.7.0, `@journal.one/gateway-protocol` 0.7.0, and `journal-gateway-client`
-0.7.0 speak the same protocol. Bump them together with the script below; never
-edit versions by hand. The npm and PyPI publish scripts run
+customer can trust that `@journal.one/gateway`, `@journal.one/gateway-client`,
+`@journal.one/gateway-protocol`, and `journal-gateway-client` speak the same
+protocol when installed at the same version. Bump them together with the script
+below; never edit versions by hand. The npm and PyPI publish scripts run
 `packaging/check-lockstep.sh` and refuse to publish if the four versions disagree.
 
 ## Packages
