@@ -528,3 +528,31 @@ async def test_on_socket_error_fires_on_abnormal_close():
     assert gw is not None and gw.organization_id == "org_1"
 
     await srv.stop()
+
+
+@pytest.mark.asyncio
+async def test_on_socket_error_ignores_protocol_handler_errors():
+    """Protocol/handler bugs should not be reported as socket failures."""
+    errors: list[tuple] = []
+    disconnected: list[ConnectedGateway] = []
+    srv = GatewayServer(
+        validate_token=_validate_token,
+        port=0,
+        ping_interval=0,
+        on_socket_error=lambda err, gw: errors.append((err, gw)),
+    )
+    srv.on_gateway_disconnected = lambda gw: disconnected.append(gw)
+    await srv.start()
+
+    ws = await connect_and_auth(srv.url, "gw_valid")
+    await send_version_changed(ws)
+    assert len(srv.connected_gateways) == 1
+
+    await ws.send("not-json")
+    await asyncio.sleep(0.1)
+
+    assert errors == []
+    assert len(disconnected) == 1
+    assert len(srv.connected_gateways) == 0
+
+    await srv.stop()
