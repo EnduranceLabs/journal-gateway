@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GatewayConnection, AuthenticationError } from "../connection.js";
-import type { GatewayConfig, IntegrationProvider, GatewayVersions, Skill } from "@journal.one/gateway-protocol";
+import type { GatewayConfig, IntegrationProvider, GatewayVersions, Skill } from "journal-gateway-protocol";
 import { EventEmitter } from "node:events";
 
 // Mock ws
@@ -541,7 +541,7 @@ describe("GatewayConnection", () => {
   it("sends tool_error for unknown integration", async () => {
     const provider = createMockProvider();
     (provider.callTool as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new (await import("@journal.one/gateway-protocol")).IntegrationNotFoundError("unknown")
+      new (await import("journal-gateway-protocol")).IntegrationNotFoundError("unknown")
     );
 
     const conn = new GatewayConnection(config, provider);

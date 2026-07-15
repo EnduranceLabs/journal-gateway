@@ -1,4 +1,4 @@
-# @journal.one/gateway-client
+# journal-gateway-client
 
 TypeScript service-side library for the Journal Gateway protocol. Use this
 package in the service that accepts gateway WebSocket connections, validates
@@ -6,20 +6,20 @@ gateway tokens, receives tool and skill catalogs, and calls tools on connected
 gateways.
 
 If you want to run the customer-side gateway process, install
-`@journal.one/gateway` instead.
+`journal-gateway` instead.
 
 ## Install
 
 Requires Node.js 22 or newer.
 
 ```bash
-npm install @journal.one/gateway-client
+npm install journal-gateway-client
 ```
 
 ## Quick Start
 
 ```ts
-import { GatewayServer } from "@journal.one/gateway-client";
+import { GatewayServer } from "journal-gateway-client";
 
 const server = new GatewayServer({
   port: 8080,
@@ -118,7 +118,7 @@ sent to the gateway and used as the parent for remote tool execution spans.
 
 - [Full README](https://github.com/EnduranceLabs/journal-gateway#readme)
 - [Protocol spec](https://github.com/EnduranceLabs/journal-gateway/blob/main/spec/protocol.md)
-- [Gateway package](https://www.npmjs.com/package/@journal.one/gateway)
+- [Gateway package](https://www.npmjs.com/package/journal-gateway)
 
 ## License
 

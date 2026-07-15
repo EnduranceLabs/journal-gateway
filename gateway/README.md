@@ -1,4 +1,4 @@
-# @journal.one/gateway
+# journal-gateway
 
 Journal Gateway runs inside your network and connects your MCP servers and skill
 files to [Journal](https://journal.one). It opens an outbound WebSocket to
@@ -20,7 +20,7 @@ inbound ports.
 Requires Node.js 22 or newer.
 
 ```bash
-npm install -g @journal.one/gateway
+npm install -g journal-gateway
 journal-gateway --version
 ```
 
@@ -70,7 +70,7 @@ journal-gateway --env-file .env --config gateway.json
 
 The example MCP server package is an external runtime command. It is resolved by
 `npx` when the gateway starts. It is not bundled with, or installed by,
-`@journal.one/gateway`.
+`journal-gateway`.
 
 ## Configuration
 

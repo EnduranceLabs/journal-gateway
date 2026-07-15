@@ -7,7 +7,7 @@ import {
   type GatewayErrorCode,
   type IntegrationProvider,
   type GatewayConfig,
-} from "@journal.one/gateway-protocol";
+} from "journal-gateway-protocol";
 import { Logger } from "./common/logger.js";
 import { VERSION } from "./version.js";
 import { Telemetry } from "./telemetry.js";

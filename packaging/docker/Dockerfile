@@ -5,8 +5,8 @@ WORKDIR /app
 FROM base AS build
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter=@journal.one/gateway-protocol --filter=@journal.one/gateway build
-RUN pnpm --filter=@journal.one/gateway deploy --prod --legacy /prod/gateway
+RUN pnpm --filter=journal-gateway-protocol --filter=journal-gateway build
+RUN pnpm --filter=journal-gateway deploy --prod --legacy /prod/gateway
 
 FROM base AS runner
 ENV NODE_ENV=production

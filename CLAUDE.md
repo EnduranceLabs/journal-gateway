@@ -5,7 +5,7 @@ Small workspace: `protocol/` for shared types, `gateway/` for the runtime, clien
 libraries for the service side. Keep it simple.
 
 ## Structure
-- `protocol/` — `@journal.one/gateway-protocol` package. Pure Zod schemas and TypeScript
+- `protocol/` — `journal-gateway-protocol` package. Pure Zod schemas and TypeScript
   types shared by both gateway and client libraries (Integration, ToolResult, Skill,
   message schemas, IntegrationProvider, GatewayConfig, errors).
 - `gateway/src/common/` — Shared utilities (logger).
@@ -86,7 +86,7 @@ A JSON Schema for this file lives at `spec/gateway-config.schema.json` (referenc
 `$schema` for editor autocomplete). Runnable samples are in `examples/`.
 
 ## Client Libraries
-- `clients/typescript/` — `@journal.one/gateway-client` npm package. Implements the
+- `clients/typescript/` — `journal-gateway-client` npm package. Implements the
   service side of the protocol: runs a WebSocket server, authenticates gateways,
   auto-pulls tools/skills on `version_changed`, and provides `callTool()`,
   `getVersions()`, `getTools()`, and `getSkills()` APIs.

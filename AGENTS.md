@@ -41,6 +41,10 @@ pnpm test:python      # Python client tests (creates the venv on first run)
 pnpm test:all         # everything above
 ```
 
+If your default `python3` is older than 3.11, prefix Python-dependent commands
+with `PYTHON=/path/to/python3.11`, for example
+`PYTHON=/opt/homebrew/bin/python3.12 pnpm test:all`.
+
 Run `pnpm -r build` (or at least `pnpm -r typecheck`) before opening a PR.
 
 ## Conventions that are easy to get wrong
