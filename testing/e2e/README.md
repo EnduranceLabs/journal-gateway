@@ -9,8 +9,8 @@ client library (service side)  <—ws—>  journal-gateway  <—stdio—>  Toolb
 
 They validate the database integration examples added under
 [`examples/integrations/`](../../examples/integrations) and the
-`@modelcontextprotocol/server-postgres` → `@toolbox-sdk/server` migration in the
-docs, plus the gateway's config hot-reload.
+legacy Postgres reference-server to `@toolbox-sdk/server` migration in the docs,
+plus the gateway's config hot-reload.
 
 ## What is covered
 
@@ -29,12 +29,9 @@ env-var tables are correct.
 
 - Docker (Compose v2)
 - Node.js >= 22
-- A built repo:
+- Workspace dependencies:
   ```bash
   pnpm install
-  pnpm build                              # gateway
-  (cd protocol && pnpm build)             # protocol
-  (cd clients/typescript && pnpm build)   # client library used by the drivers
   ```
 
 ## Run everything
@@ -53,7 +50,8 @@ docker compose -f testing/e2e/docker-compose.yml up -d
 node testing/e2e/driver.mjs \
   testing/e2e/configs/postgres.json testing/e2e/env/postgres.env postgres \
   "SELECT name, count(*) n FROM reporting.events GROUP BY name ORDER BY name" \
-  "INSERT INTO reporting.events (name, amount) VALUES ('hack', 1)"
+  "INSERT INTO reporting.events (name, amount) VALUES ('hack', 1)" \
+  '{"purchase":1,"signup":2}'
 
 # Config hot-reload
 node testing/e2e/hotreload.mjs

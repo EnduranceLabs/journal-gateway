@@ -31,6 +31,12 @@ async function waitFor(check, ms, label) {
   throw new Error(`timeout waiting for ${label}`);
 }
 
+function deadline(ms, label) {
+  return new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`timeout waiting for ${label}`)), ms)
+  );
+}
+
 const tmp = mkdtempSync(path.join(tmpdir(), "jg-hotreload-"));
 const configPath = path.join(tmp, "gateway.json");
 writeFileSync(configPath, JSON.stringify({ mcpServers: [] }));
@@ -83,7 +89,7 @@ try {
     }
   );
 
-  const gw = await connected;
+  const gw = await Promise.race([connected, deadline(30_000, "gateway connect")]);
   log(`connected id=${gw.id}, initial integrations=${gw.integrations.length} (expect 0)`);
   if (gw.integrations.length !== 0) { ok = false; log("FAIL: expected 0 integrations at start"); }
 

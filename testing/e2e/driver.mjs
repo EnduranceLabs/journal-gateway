@@ -1,7 +1,7 @@
 // End-to-end driver: real client server + real gateway + real Toolbox MCP
 // server + real database. No mocks.
 //
-//   node driver.mjs <configPath> <envFilePath> <integrationId> <readSql> <writeSql>
+//   node driver.mjs <configPath> <envFilePath> <integrationId> <readSql> <writeSql> <expectedCountsJson>
 //
 // It:
 //   1. starts a GatewayServer (the Journal "service" side) on ws://127.0.0.1:8080
@@ -24,6 +24,7 @@ const GATEWAY_BIN = path.join(REPO, "gateway", "dist", "main.js");
 
 const [, , configPath, envFilePath, integrationId, readSql, writeSql] =
   process.argv;
+const expectedCountsJson = process.argv[7];
 const TOKEN = "gw_e2e";
 const PORT = 8080;
 
@@ -37,6 +38,43 @@ function deadline(ms, label) {
   return new Promise((_, rej) =>
     setTimeout(() => rej(new Error(`timeout waiting for ${label}`)), ms)
   );
+}
+
+function parseExpectedCounts(raw) {
+  if (!raw) {
+    throw new Error("missing expectedCountsJson argument");
+  }
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("expectedCountsJson must be an object");
+  }
+  return parsed;
+}
+
+function parseRows(result) {
+  const rows = [];
+  for (const block of result.content ?? []) {
+    if (block.type !== "text") continue;
+    try {
+      const parsed = JSON.parse(block.text);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        rows.push(parsed);
+      }
+    } catch {
+      // Ignore non-JSON text blocks. Toolbox returns one JSON text block per row.
+    }
+  }
+  return rows;
+}
+
+function assertExpectedCounts(rows, expectedCounts) {
+  for (const [name, expected] of Object.entries(expectedCounts)) {
+    const row = rows.find((r) => r.name === name);
+    const actual = row ? Number(row.n) : NaN;
+    if (actual !== expected) {
+      fail(`expected ${name} count ${expected}, got ${row ? row.n : "missing"}`);
+    }
+  }
 }
 
 async function waitFor(check, ms, label) {
@@ -67,6 +105,8 @@ async function cleanup() {
 }
 
 try {
+  const expectedCounts = parseExpectedCounts(expectedCountsJson);
+
   await server.start();
   log(`service listening on ${server.url}`);
 
@@ -98,32 +138,36 @@ try {
   );
 
   log(`integrations (${withTools.integrations.length}):`);
-  let execTool = null;
   for (const intg of withTools.integrations) {
     log(`  - ${intg.id} (${intg.name}): ${intg.tools.length} tools`);
     for (const t of intg.tools) {
       log(`      • ${t.name}: ${t.description ?? ""}`);
-      if (t.name === "execute_sql") execTool = { intg: intg.id, def: t };
     }
   }
+  const requestedIntegration = withTools.integrations.find(
+    (intg) => intg.id === integrationId
+  );
+  const execTool = requestedIntegration?.tools.find((t) => t.name === "execute_sql");
   if (execTool)
-    log("execute_sql inputSchema:", JSON.stringify(execTool.def.inputSchema));
+    log("execute_sql inputSchema:", JSON.stringify(execTool.inputSchema));
 
   if (!execTool) {
-    fail("no execute_sql tool was published by the gateway");
+    fail(`no execute_sql tool was published for integration ${integrationId}`);
   } else {
     // READ
-    log(`calling ${execTool.intg}.execute_sql (read): ${readSql}`);
-    const readRes = await server.callTool(execTool.intg, "execute_sql", {
+    log(`calling ${integrationId}.execute_sql (read): ${readSql}`);
+    const readRes = await server.callTool(integrationId, "execute_sql", {
       sql: readSql,
     });
     log("read result isError:", readRes.isError === true);
     log("read result content:", JSON.stringify(readRes.content));
     if (readRes.isError) fail("read query returned isError=true");
+    const rows = parseRows(readRes);
+    assertExpectedCounts(rows, expectedCounts);
 
     // WRITE (must be rejected by the read-only DB account)
-    log(`calling ${execTool.intg}.execute_sql (write): ${writeSql}`);
-    const writeRes = await server.callTool(execTool.intg, "execute_sql", {
+    log(`calling ${integrationId}.execute_sql (write): ${writeSql}`);
+    const writeRes = await server.callTool(integrationId, "execute_sql", {
       sql: writeSql,
     });
     const text = JSON.stringify(writeRes.content) + " isError=" + writeRes.isError;
