@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EnduranceLabs/journal-gateway/main/spec/gateway-config.schema.json",
+  "mcpServers": [
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "description": "PostgreSQL access through Google MCP Toolbox for Databases.",
+      "command": "npx",
+      "args": ["-y", "@toolbox-sdk/server", "--prebuilt", "postgres", "--stdio"],
+      "envVars": {
+        "POSTGRES_HOST": "POSTGRES_HOST",
+        "POSTGRES_PORT": "POSTGRES_PORT",
+        "POSTGRES_DATABASE": "POSTGRES_DATABASE",
+        "POSTGRES_USER": "POSTGRES_USER",
+        "POSTGRES_PASSWORD": "POSTGRES_PASSWORD"
+      }
+    }
+  ]
+}
