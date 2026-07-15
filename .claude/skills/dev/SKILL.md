@@ -1,6 +1,6 @@
 ---
 name: dev
-description: Development commands and workflows for the journal-edge project
+description: Development commands and workflows for the journal-gateway project
 user-invocable: false
 ---
 

@@ -34,7 +34,7 @@ const msg = GatewayMessageSchema.parse(JSON.parse(raw));
 
 ## Full documentation
 
-See the [root README](https://github.com/EnduranceLabs/journal-edge#readme) for protocol details, architecture, and configuration reference.
+See the [root README](https://github.com/EnduranceLabs/journal-gateway#readme) for protocol details, architecture, and configuration reference.
 
 ## License
 

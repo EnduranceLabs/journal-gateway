@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/EnduranceLabs/journal-edge/main/spec/gateway-config.schema.json",
+  "$id": "https://raw.githubusercontent.com/EnduranceLabs/journal-gateway/main/spec/gateway-config.schema.json",
   "title": "Journal Gateway config",
   "description": "Configuration file for the Journal Gateway (@journal.one/gateway).",
   "type": "object",

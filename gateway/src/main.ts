@@ -35,7 +35,7 @@ Environment:
 Example:
   JOURNAL_GATEWAY_TOKEN=gw_xxx journal-gateway --config gateway.json
 
-Docs: https://github.com/EnduranceLabs/journal-edge#readme`;
+Docs: https://github.com/EnduranceLabs/journal-gateway#readme`;
 
 function resolveEnvFilePath(
   env: Record<string, string | undefined>,

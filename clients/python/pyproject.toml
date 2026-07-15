@@ -25,8 +25,8 @@ dependencies = ["websockets>=13.0"]
 
 [project.urls]
 Homepage = "https://journal.one"
-Repository = "https://github.com/EnduranceLabs/journal-edge"
-Documentation = "https://github.com/EnduranceLabs/journal-edge#readme"
+Repository = "https://github.com/EnduranceLabs/journal-gateway"
+Documentation = "https://github.com/EnduranceLabs/journal-gateway#readme"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.24"]
