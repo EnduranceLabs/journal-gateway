@@ -34,7 +34,7 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
 ```bash
 docker run -e JOURNAL_GATEWAY_TOKEN=gw_your_token \
   -v ./gateway.json:/etc/journal/gateway.json \
-  ghcr.io/journal/gateway --config /etc/journal/gateway.json
+  ghcr.io/endurancelabs/gateway --config /etc/journal/gateway.json
 ```
 
 ### Example config file (`gateway.json`)

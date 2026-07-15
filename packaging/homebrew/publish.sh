@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TAP_REPO="${TAP_REPO:-journal/homebrew-tap}"
+TAP_REPO="${TAP_REPO:-EnduranceLabs/homebrew-tap}"
 FORMULA="packaging/homebrew/journal-gateway.rb"
 VERSION="${VERSION:-$(node -p "require('./gateway/package.json').version")}"
 TARBALL_URL="https://registry.npmjs.org/@journal.one/gateway/-/gateway-${VERSION}.tgz"

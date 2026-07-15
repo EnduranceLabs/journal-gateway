@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REGISTRY="${REGISTRY:-ghcr.io/journal}"
+REGISTRY="${REGISTRY:-ghcr.io/endurancelabs}"
 IMAGE="${REGISTRY}/gateway"
 TAG="${TAG:-latest}"
 
