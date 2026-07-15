@@ -29,10 +29,14 @@ env-var tables are correct.
 
 - Docker (Compose v2)
 - Node.js >= 22
-- Workspace dependencies:
+- Workspace dependencies installed and packages built (the drivers import the
+  gateway and client `dist/` output):
   ```bash
   pnpm install
+  pnpm -r build
   ```
+  `run-all.sh` runs `pnpm -r build` for you; the build step above is only needed
+  for the "Run pieces manually" commands below.
 
 ## Run everything
 
