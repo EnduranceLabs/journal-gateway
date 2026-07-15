@@ -460,10 +460,7 @@ class GatewayServer:
             ):
                 self._on_socket_error(e, gw_conn.info if gw_conn else None)
         except Exception as e:
-            if self._on_socket_error:
-                self._on_socket_error(e, gw_conn.info if gw_conn else None)
-            else:
-                logger.exception("Error handling gateway connection %s", conn_id)
+            logger.exception("Error handling gateway connection %s", conn_id)
         finally:
             if gw_conn:
                 gw_conn.reject_all("Gateway disconnected")

@@ -10,6 +10,11 @@ const mcpClientInstances: Array<{
   emitter: EventEmitter;
   getTools: ReturnType<typeof vi.fn>;
 }> = [];
+const startFailures = new Map<string, number>();
+
+function failStarts(id: string, count: number): void {
+  startFailures.set(id, count);
+}
 
 // Mock McpClient
 vi.mock("../mcp-client.js", () => {
@@ -23,11 +28,21 @@ vi.mock("../mcp-client.js", () => {
           inputSchema: { type: "object" },
         },
       ]);
-      const willFail = definition.id === "broken";
+      const defaultFailures = definition.id === "broken"
+        ? Number.POSITIVE_INFINITY
+        : 0;
+      const start = vi.fn().mockImplementation(() => {
+        const remaining = startFailures.get(definition.id) ?? defaultFailures;
+        if (remaining > 0) {
+          if (Number.isFinite(remaining)) {
+            startFailures.set(definition.id, remaining - 1);
+          }
+          return Promise.reject(new Error("Connection closed"));
+        }
+        return Promise.resolve();
+      });
       const instance = {
-        start: willFail
-          ? vi.fn().mockRejectedValue(new Error("Connection closed"))
-          : vi.fn().mockResolvedValue(undefined),
+        start,
         stop: vi.fn().mockResolvedValue(undefined),
         getTools,
         callTool: vi.fn().mockResolvedValue({
@@ -136,6 +151,7 @@ describe("Runtime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mcpClientInstances.length = 0;
+    startFailures.clear();
     skillClientEmitter.removeAllListeners();
     configWatcherEmitter.removeAllListeners();
     envFileEmitter.removeAllListeners();
@@ -156,14 +172,45 @@ describe("Runtime", () => {
     const broken: McpServerConfig = { ...testIntegration, id: "broken" };
     const runtime = new Runtime(makeConfig([broken, testIntegration]));
 
-    await expect(runtime.start()).resolves.toBeUndefined();
+    try {
+      await expect(runtime.start()).resolves.toBeUndefined();
 
-    const tools = await runtime.getTools();
-    expect(tools.map((t) => t.id)).toEqual(["test-db"]);
+      const tools = await runtime.getTools();
+      expect(tools.map((t) => t.id)).toEqual(["test-db"]);
 
-    // The failed client is stopped (cleanup), the healthy one is not.
-    const brokenInstance = mcpClientInstances.find((i) => i.id === "broken");
-    expect(brokenInstance).toBeDefined();
+      // The failed client is stopped (cleanup), the healthy one is not.
+      const brokenInstance = mcpClientInstances.find((i) => i.id === "broken");
+      expect(brokenInstance).toBeDefined();
+    } finally {
+      await runtime.stop();
+    }
+  });
+
+  it("retries an integration that failed during startup", async () => {
+    vi.useFakeTimers();
+    failStarts("flaky", 1);
+    const flaky: McpServerConfig = { ...testIntegration, id: "flaky" };
+    const runtime = new Runtime(makeConfig([flaky]));
+
+    try {
+      await runtime.start();
+      expect(await runtime.getTools()).toHaveLength(0);
+
+      const changedPromise = new Promise<void>((resolve) => {
+        runtime.on("versions_changed", resolve);
+      });
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(500);
+      await changedPromise;
+
+      const tools = await runtime.getTools();
+      expect(tools.map((t) => t.id)).toEqual(["flaky"]);
+      expect(mcpClientInstances.filter((i) => i.id === "flaky")).toHaveLength(2);
+    } finally {
+      await runtime.stop();
+      vi.useRealTimers();
+    }
   });
 
   it("generates tool integrations with tools", async () => {
@@ -339,6 +386,7 @@ describe("Runtime hot-reload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mcpClientInstances.length = 0;
+    startFailures.clear();
     skillClientEmitter.removeAllListeners();
     configWatcherEmitter.removeAllListeners();
     envFileEmitter.removeAllListeners();
