@@ -13,7 +13,7 @@ The first argument is the message name (e.g., `heartbeat_ack`). The second argum
 
 ## 1. Add the Zod schema and TypeScript type
 
-Open `gateway/src/types/messages.ts` and add the Zod schema + type export.
+Open `protocol/src/messages.ts` and add the Zod schema + type export.
 
 Place it in the correct section based on direction:
 - **Gateway -> Service:** after the existing gateway messages (before `GatewayMessageSchema`)
@@ -30,14 +30,14 @@ export type MyNewMessage = z.infer<typeof MyNewMessageSchema>;
 
 ## 2. Add to the discriminated union
 
-In the same file (`gateway/src/types/messages.ts`), add the new schema to the appropriate `z.discriminatedUnion("type", [...])`:
+In the same file (`protocol/src/messages.ts`), add the new schema to the appropriate `z.discriminatedUnion("type", [...])`:
 
 - **Gateway -> Service:** add to `GatewayMessageSchema`
 - **Service -> Gateway:** add to `ServiceMessageSchema`
 
 ## 3. Re-export from index.ts
 
-Open `gateway/src/types/index.ts` and add the schema and type to the re-exports from `"./messages.js"`:
+Open `protocol/src/index.ts` and add the schema and type to the re-exports from `"./messages.js"`:
 
 ```ts
 export {
@@ -104,6 +104,6 @@ pnpm typecheck     # Verify types compile
 ## Key files
 
 - `spec/protocol.md` — Protocol specification
-- `gateway/src/types/messages.ts` — Zod schemas and discriminated unions
-- `gateway/src/types/index.ts` — Re-exports
+- `protocol/src/messages.ts` — Zod schemas and discriminated unions
+- `protocol/src/index.ts` — Re-exports
 - `gateway/src/__tests__/messages.test.ts` — Message parsing tests

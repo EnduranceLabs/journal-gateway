@@ -135,7 +135,7 @@ Response to a `get_tools` request. Contains all MCP tool integrations.
       "description": "Query PostgreSQL databases",
       "tools": [
         {
-          "name": "query",
+          "name": "execute_sql",
           "description": "Execute a read-only SQL query",
           "inputSchema": {
             "type": "object",
@@ -324,7 +324,7 @@ Sent to invoke a tool on a registered integration.
   "type": "tool_call",
   "requestId": "req_001",
   "integrationId": "postgresql",
-  "toolName": "query",
+  "toolName": "execute_sql",
   "arguments": { "sql": "SELECT count(*) FROM users" },
   "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
 }

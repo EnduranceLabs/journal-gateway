@@ -2,11 +2,11 @@
   "$schema": "https://raw.githubusercontent.com/EnduranceLabs/journal-gateway/main/spec/gateway-config.schema.json",
   "mcpServers": [
     {
-      "id": "postgresql",
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "description": "PostgreSQL access through Google MCP Toolbox for Databases.",
       "command": "npx",
       "args": ["-y", "@toolbox-sdk/server", "--prebuilt", "postgres", "--stdio"],
-      "name": "PostgreSQL",
-      "description": "Query the analytics database",
       "envVars": {
         "POSTGRES_HOST": "POSTGRES_HOST",
         "POSTGRES_PORT": "POSTGRES_PORT",
@@ -14,15 +14,6 @@
         "POSTGRES_USER": "POSTGRES_USER",
         "POSTGRES_PASSWORD": "POSTGRES_PASSWORD"
       }
-    },
-    {
-      "id": "remote-api",
-      "transport": "streamable-http",
-      "url": "https://mcp.example.com/mcp",
-      "name": "Remote API",
-      "description": "Remote MCP server",
-      "headers": { "Authorization": "REMOTE_MCP_AUTHORIZATION" }
     }
-  ],
-  "skillsDir": "./skills"
+  ]
 }

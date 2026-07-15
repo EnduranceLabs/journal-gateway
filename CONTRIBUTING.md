@@ -2,7 +2,7 @@
 
 ## Development
 
-Prerequisites: Node.js 20+, pnpm, Python 3.10+ (for Python client).
+Prerequisites: Node.js 22+, pnpm, Python 3.10+ (for Python client).
 
 ```bash
 # Install dependencies
@@ -90,7 +90,7 @@ const server = new GatewayServer({
 await server.start();
 
 // Once a gateway connects and registers:
-const result = await server.callTool("my-integration", "query", { sql: "SELECT 1" });
+const result = await server.callTool("postgresql", "execute_sql", { sql: "SELECT 1" });
 console.log(result.content);
 
 await server.stop();
@@ -110,7 +110,7 @@ server = GatewayServer(validate_token=validate, port=8080)
 await server.start()
 
 # Once a gateway connects:
-result = await server.call_tool("my-integration", "query", {"sql": "SELECT 1"})
+result = await server.call_tool("postgresql", "execute_sql", {"sql": "SELECT 1"})
 print(result.content)
 
 await server.stop()

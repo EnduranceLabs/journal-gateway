@@ -38,7 +38,7 @@ server.onGatewayDisconnected = (gateway) => {
 await server.start();
 
 // Call a tool on a connected gateway
-const result = await server.callTool("postgresql", "query", {
+const result = await server.callTool("postgresql", "execute_sql", {
   sql: "SELECT 1",
 });
 ```
