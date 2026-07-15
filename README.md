@@ -32,10 +32,14 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
 ### Docker
 
 ```bash
-docker run -e JOURNAL_GATEWAY_TOKEN=gw_your_token \
-  -v ./gateway.json:/etc/journal/gateway.json \
-  ghcr.io/endurancelabs/gateway --config /etc/journal/gateway.json
+docker run --rm \
+  -e JOURNAL_GATEWAY_TOKEN=gw_your_token \
+  -v "$(pwd)/gateway.json:/etc/journal/gateway.json:ro" \
+  ghcr.io/endurancelabs/journal-gateway:latest --config /etc/journal/gateway.json
 ```
+
+The image has an `ENTRYPOINT` of `journal-gateway`, so flags (`--config`, `--env-file`,
+`--version`) go straight after the image name. Pass secrets with `-e` or `--env-file .env`.
 
 ### Example config file (`gateway.json`)
 

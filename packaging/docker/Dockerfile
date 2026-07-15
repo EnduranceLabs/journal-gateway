@@ -12,4 +12,4 @@ FROM base AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /prod/gateway ./
-CMD ["node", "dist/main.js"]
+ENTRYPOINT ["node", "dist/main.js"]

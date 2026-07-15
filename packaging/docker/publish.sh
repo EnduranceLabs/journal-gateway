@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REGISTRY="${REGISTRY:-ghcr.io/endurancelabs}"
-IMAGE="${REGISTRY}/gateway"
+IMAGE="${REGISTRY}/journal-gateway"
 TAG="${TAG:-latest}"
 
 echo "Building Docker image: ${IMAGE}:${TAG}"
