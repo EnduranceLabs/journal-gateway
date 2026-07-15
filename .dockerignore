@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.git
+.venv
+**/.venv
+.pnpm-store
+**/__pycache__
+**/.pytest_cache
+*.log
+.DS_Store
