@@ -26,9 +26,11 @@ pnpm test:client
 # Run integration tests (requires gateway to be built)
 pnpm test:integration
 
-# Run Python client tests
-cd clients/python && python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]" && pytest tests/
+# Run Python client tests (creates the venv on first run)
+pnpm test:python
+
+# Run every test suite
+pnpm test:all
 ```
 
 ## Architecture
@@ -52,8 +54,13 @@ clients/
   python/                   # journal-gateway-client PyPI package
 testing/
   integration/              # End-to-end tests (real gateway <-> client library)
+examples/                   # Sample gateway.json + minimal TS/Python client servers
 spec/
   protocol.md               # WebSocket protocol specification
+  gateway-config.schema.json # JSON Schema for the gateway config file
+packaging/
+  bump-version.sh           # Lockstep version bump across all four packages
+  npm/ pypi/ homebrew/ docker/ # Per-target publish scripts + release runbook
 ```
 
 The gateway connects outbound to the Journal service over WebSocket. It manages MCP server connections (stdio subprocesses, SSE, or streamable-http) and skill files, routing tool calls from the service to the appropriate MCP server.
@@ -122,15 +129,18 @@ The gateway communicates with Journal over WebSocket using a simple JSON protoco
 
 ## Packaging
 
+All four packages (`gateway-protocol`, `gateway`, `gateway-client`, and the Python
+`journal-gateway-client`) release in lockstep at the same version. Bump them together
+with `packaging/bump-version.sh` — never edit versions by hand. See
+[packaging/npm/README.md](./packaging/npm/README.md) for the full release runbook
+(npm, PyPI, Homebrew, and Docker).
+
 ```bash
-# Docker build
+# Bump every package to the same version
+./packaging/bump-version.sh 0.8.0
+
+# Build the Docker image locally
 docker build -f packaging/docker/Dockerfile -t journal-gateway .
-
-# Docker publish
-./packaging/docker/publish.sh
-
-# npm publish
-./packaging/npm/publish.sh
 ```
 
 ## Pre-PR checklist

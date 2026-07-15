@@ -1,9 +1,9 @@
 class JournalGateway < Formula
   desc "Connect your tools to the Journal agent via an outbound WebSocket gateway"
-  homepage "https://github.com/journal/journal-edge"
+  homepage "https://github.com/EnduranceLabs/journal-edge"
   # url and sha256 are updated by packaging/homebrew/publish.sh
-  url "https://registry.npmjs.org/@journal.one/gateway/-/gateway-0.2.0.tgz"
-  sha256 "PLACEHOLDER"
+  url "https://registry.npmjs.org/@journal.one/gateway/-/gateway-0.7.0.tgz"
+  sha256 "5e495d9a9d1f00d925ac0be3806ba6cbf794966c49cc9734bdd02813e8ec0c97"
   license "MIT"
 
   depends_on "node@22"

@@ -2,20 +2,14 @@ FROM node:22-slim AS base
 RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
 WORKDIR /app
 
-FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
-COPY gateway/package.json ./gateway/package.json
-RUN cd gateway && pnpm install --frozen-lockfile
-
-FROM base AS builder
-COPY --from=deps /app/gateway/node_modules ./gateway/node_modules
+FROM base AS build
 COPY . .
-RUN cd gateway && pnpm build
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter=@journal.one/gateway-protocol --filter=@journal.one/gateway build
+RUN pnpm --filter=@journal.one/gateway deploy --prod --legacy /prod/gateway
 
 FROM base AS runner
 ENV NODE_ENV=production
-COPY --from=deps /app/gateway/node_modules ./gateway/node_modules
-COPY --from=builder /app/gateway/dist ./gateway/dist
-COPY gateway/package.json ./gateway/package.json
-
-CMD ["node", "gateway/dist/main.js"]
+WORKDIR /app
+COPY --from=build /prod/gateway ./
+ENTRYPOINT ["node", "dist/main.js"]

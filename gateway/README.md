@@ -36,6 +36,10 @@ The gateway authenticates, announces its tools, and waits for requests from Jour
 
 The gateway watches the config file and `.env` file for changes at runtime — add, remove, or modify MCP servers without restarting.
 
+Startup is resilient: if one MCP server fails to start (bad command, unreachable URL), it is logged and skipped — the gateway still connects and serves the healthy servers and skills.
+
+Run `journal-gateway --help` for all flags (`--config`, `--env-file`, `--version`), or see the sample config and client examples in [`examples/`](https://github.com/EnduranceLabs/journal-edge/tree/main/examples). A JSON Schema for the config file is published at [`spec/gateway-config.schema.json`](https://github.com/EnduranceLabs/journal-edge/blob/main/spec/gateway-config.schema.json) — reference it with `$schema` for editor autocomplete.
+
 ## Transports
 
 MCP servers can connect via three transports:

@@ -22,6 +22,9 @@ libraries for the service side. Keep it simple.
   skills change at runtime. Supports hot-reload: accepts optional `configFilePath`
   and `envFilePath`, creates ConfigWatcher and EnvFile instances, and dynamically
   adds/removes/restarts MCP clients when config or env files change on disk.
+  Startup is resilient: an MCP server that fails to start is logged and skipped
+  (with cleanup), never fatal — the gateway still connects and serves the healthy
+  servers and skills.
 - `gateway/src/mcp-client.ts` — Manages individual MCP server connections across three
   transports: `stdio` (subprocess), `sse` (SSEClientTransport), and `streamable-http`
   (StreamableHTTPClientTransport). Uses a `createTransport()` factory that switches on
@@ -57,9 +60,11 @@ libraries for the service side. Keep it simple.
 - `gateway/src/env-file.ts` — Loads and watches a `.env` file. Uses `dotenv.parse()` for
   parsing without mutating `process.env`. `fs.watch` + 500ms debounce pattern. Emits
   `env_changed` on file modification.
-- `gateway/src/main.ts` — CLI entry point. Auto-detects `.env` in cwd (with `--env-file`
-  override or `JOURNAL_GATEWAY_ENV_FILE` env var), loads it before `parseConfig()`, and
-  passes config file path + env file path to `Runtime` for hot-reload.
+- `gateway/src/main.ts` — CLI entry point. Handles `--help`/`-h` and `--version`/`-v`,
+  then auto-detects `.env` in cwd (with `--env-file` override or `JOURNAL_GATEWAY_ENV_FILE`
+  env var), loads it before `parseConfig()`, and passes config file path + env file path
+  to `Runtime` for hot-reload. Config/validation errors are printed as readable messages
+  (Zod issues formatted per-field), not stack traces.
 
 ## Gateway Config File
 All MCP servers and skills are configured via a single JSON config file with two top-level
@@ -77,6 +82,9 @@ For `sse`/`streamable-http`, the `headers` mapping resolves `{ headerName: envVa
 from host env vars at startup. Configs without a `transport` field that have `command`
 are treated as `stdio` for backward compatibility.
 
+A JSON Schema for this file lives at `spec/gateway-config.schema.json` (referenced via
+`$schema` for editor autocomplete). Runnable samples are in `examples/`.
+
 ## Client Libraries
 - `clients/typescript/` — `@journal.one/gateway-client` npm package. Implements the
   service side of the protocol: runs a WebSocket server, authenticates gateways,
@@ -84,6 +92,10 @@ are treated as `stdio` for backward compatibility.
   `getVersions()`, `getTools()`, and `getSkills()` APIs.
 - `clients/python/` — `journal-gateway-client` PyPI package. Same functionality
   as the TypeScript client, using `websockets` and `asyncio`.
+- Both clients expose the same optional hooks and must stay at parity:
+  `getTraceContext`/`get_trace_context` (W3C trace propagation onto `tool_call`) and
+  `onSocketError`/`on_socket_error` (surface socket-level failures; libraries never
+  log to the console themselves).
 - `testing/integration/` — Integration tests that spin up the real gateway +
   client library and verify end-to-end tool calls.
 

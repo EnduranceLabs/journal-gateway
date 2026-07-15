@@ -19,7 +19,7 @@ import {
   GetSkillsMessageSchema,
 } from "@journal.one/gateway-protocol";
 
-describe("Gateway → Service messages", () => {
+describe("Gateway -> Service messages", () => {
   it("parses authenticate message", () => {
     const msg = {
       type: "authenticate",
@@ -214,7 +214,7 @@ describe("Gateway → Service messages", () => {
   });
 });
 
-describe("Service → Gateway messages", () => {
+describe("Service -> Gateway messages", () => {
   it("parses authenticated message", () => {
     const msg = {
       type: "authenticated",

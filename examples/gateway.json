@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/EnduranceLabs/journal-edge/main/spec/gateway-config.schema.json",
+  "mcpServers": [
+    {
+      "id": "postgresql",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "name": "PostgreSQL",
+      "description": "Query the analytics database",
+      "envVars": { "DATABASE_URL": "DATABASE_URL" }
+    },
+    {
+      "id": "remote-api",
+      "transport": "streamable-http",
+      "url": "https://mcp.example.com/mcp",
+      "name": "Remote API",
+      "description": "Remote MCP server",
+      "headers": { "Authorization": "API_KEY" }
+    }
+  ],
+  "skillsDir": "./skills"
+}

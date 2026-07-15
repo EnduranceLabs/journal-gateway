@@ -51,6 +51,7 @@ class _GatewayConn:
         tool_name: str,
         arguments: dict,
         timeout: float,
+        trace: dict | None = None,
     ) -> ToolResult:
         self._next_id += 1
         request_id = f"req_{self._next_id}"
@@ -59,14 +60,19 @@ class _GatewayConn:
         future: asyncio.Future[ToolResult] = loop.create_future()
         self.pending[request_id] = future
 
-        msg = json.dumps({
+        payload: dict = {
             "type": "tool_call",
             "requestId": request_id,
             "integrationId": integration_id,
             "toolName": tool_name,
             "arguments": arguments,
-        })
-        await self.ws.send(msg)
+        }
+        if trace:
+            if trace.get("traceparent"):
+                payload["traceparent"] = trace["traceparent"]
+            if trace.get("tracestate"):
+                payload["tracestate"] = trace["tracestate"]
+        await self.ws.send(json.dumps(payload))
 
         try:
             return await asyncio.wait_for(future, timeout=timeout)
@@ -132,6 +138,8 @@ class GatewayServer:
         ping_interval: float = 30.0,
         pong_timeout: float = 10.0,
         pull_timeout: float = 30.0,
+        get_trace_context: Callable[[], dict | None] | None = None,
+        on_socket_error: Callable[[Exception, ConnectedGateway | None], None] | None = None,
     ):
         self._validate_token = validate_token
         self._host = host
@@ -139,6 +147,8 @@ class GatewayServer:
         self._ping_interval = ping_interval
         self._pong_timeout = pong_timeout
         self._pull_timeout = pull_timeout
+        self._get_trace_context = get_trace_context
+        self._on_socket_error = on_socket_error
         self._server: websockets.asyncio.server.Server | None = None
         self._gateways: dict[str, _GatewayConn] = {}
         self._next_id = 0
@@ -234,7 +244,9 @@ class GatewayServer:
         gw = self._find_gateway(integration_id)
         if not gw:
             raise LookupError(f"No gateway has integration '{integration_id}'")
-        return await gw.call_tool(integration_id, tool_name, arguments, timeout)
+        return await gw.call_tool(
+            integration_id, tool_name, arguments, timeout, self._trace_context()
+        )
 
     async def call_tool_for_org(
         self,
@@ -263,10 +275,13 @@ class GatewayServer:
 
         random.shuffle(candidates)
 
+        trace = self._trace_context()
         last_error: Exception | None = None
         for gw in candidates:
             try:
-                return await gw.call_tool(integration_id, tool_name, arguments, timeout)
+                return await gw.call_tool(
+                    integration_id, tool_name, arguments, timeout, trace
+                )
             except Exception as err:
                 last_error = err
                 # Only retry on connection-level errors
@@ -437,10 +452,18 @@ class GatewayServer:
                     except asyncio.CancelledError:
                         pass
 
-        except (asyncio.TimeoutError, websockets.exceptions.ConnectionClosed):
+        except asyncio.TimeoutError:
             pass
-        except Exception:
-            logger.exception("Error handling gateway connection %s", conn_id)
+        except websockets.exceptions.ConnectionClosed as e:
+            if self._on_socket_error and not isinstance(
+                e, websockets.exceptions.ConnectionClosedOK
+            ):
+                self._on_socket_error(e, gw_conn.info if gw_conn else None)
+        except Exception as e:
+            if self._on_socket_error:
+                self._on_socket_error(e, gw_conn.info if gw_conn else None)
+            else:
+                logger.exception("Error handling gateway connection %s", conn_id)
         finally:
             if gw_conn:
                 gw_conn.reject_all("Gateway disconnected")
@@ -505,6 +528,9 @@ class GatewayServer:
                         break
         except (asyncio.CancelledError, websockets.exceptions.ConnectionClosed):
             pass
+
+    def _trace_context(self) -> dict | None:
+        return self._get_trace_context() if self._get_trace_context else None
 
     def _find_gateway(self, integration_id: str) -> _GatewayConn | None:
         for gw in self._gateways.values():

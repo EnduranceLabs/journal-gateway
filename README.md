@@ -31,11 +31,30 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
 
 ### Docker
 
+Try it (foreground). Put `JOURNAL_GATEWAY_TOKEN=gw_your_token` in a `.env` file next to
+your `gateway.json`:
+
 ```bash
-docker run -e JOURNAL_GATEWAY_TOKEN=gw_your_token \
-  -v ./gateway.json:/etc/journal/gateway.json \
-  ghcr.io/journal/gateway --config /etc/journal/gateway.json
+docker run --rm \
+  -v "$(pwd)/gateway.json:/etc/journal/gateway.json:ro" \
+  --env-file .env \
+  ghcr.io/endurancelabs/journal-gateway:latest --config /etc/journal/gateway.json
 ```
+
+Run it as a service (detached, restarts on reboot/crash):
+
+```bash
+docker run -d --name journal-gateway --restart unless-stopped \
+  -v /etc/journal/gateway.json:/etc/journal/gateway.json:ro \
+  --env-file /etc/journal/gateway.env \
+  ghcr.io/endurancelabs/journal-gateway:latest --config /etc/journal/gateway.json
+```
+
+The image's `ENTRYPOINT` is the gateway, so flags (`--config`, `--env-file`, `--version`)
+go straight after the image name. Pass secrets with `--env-file` or `-e`; the token never
+needs to be baked into the image. Config hot-reload over a bind mount is reliable on Linux
+hosts but not on Docker Desktop (macOS/Windows) — restart the container after config edits
+there.
 
 ### Example config file (`gateway.json`)
 
@@ -62,6 +81,20 @@ docker run -e JOURNAL_GATEWAY_TOKEN=gw_your_token \
   "skillsDir": "/opt/journal/skills"
 }
 ```
+
+Runnable examples (this config plus minimal TS and Python client servers) live in
+[`examples/`](./examples). Add a `"$schema"` field pointing at
+[`spec/gateway-config.schema.json`](./spec/gateway-config.schema.json) for editor
+autocomplete and validation:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/EnduranceLabs/journal-edge/main/spec/gateway-config.schema.json",
+  "mcpServers": []
+}
+```
+
+Run `journal-gateway --help` for the full list of flags and environment variables.
 
 ## Configuration
 
@@ -150,11 +183,13 @@ The gateway also watches the config file and `.env` file for changes. When you a
 
 Version hashes (`mcpVersion` and `skillsVersion`) are content-based (SHA-256, 16 hex chars). Same content produces the same hash across restarts — the service can tell at a glance whether anything actually changed.
 
+An MCP server that fails to start (bad command, unreachable URL) is logged and skipped — the gateway still connects and serves its healthy servers and skills, so one misconfigured server never takes down the whole gateway.
+
 ### What clients should do
 
 Services using the client libraries (TypeScript or Python) receive `onGatewayConnected` after the initial pull completes (integrations are already populated). When the gateway sends `version_changed`, the client auto-pulls what changed and fires `onGatewayUpdated`.
 
-Services can also explicitly pull at any time using `getVersions()`, `getTools()`, or `getSkills()` on a specific gateway.
+Services can also explicitly pull at any time using `getVersions()`, `getTools()`, or `getSkills()` on a specific gateway. Both client libraries expose the same optional hooks for observability: `getTraceContext` / `get_trace_context` propagates a W3C trace context onto each tool call, and `onSocketError` / `on_socket_error` surfaces socket-level failures (the libraries never write to the console themselves).
 
 ## Telemetry & Audit
 

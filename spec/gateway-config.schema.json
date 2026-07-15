@@ -1,0 +1,119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/EnduranceLabs/journal-edge/main/spec/gateway-config.schema.json",
+  "title": "Journal Gateway config",
+  "description": "Configuration file for the Journal Gateway (@journal.one/gateway).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "mcpServers": {
+      "type": "array",
+      "description": "MCP server definitions the gateway exposes to Journal.",
+      "items": { "$ref": "#/definitions/mcpServer" }
+    },
+    "skillsDir": {
+      "type": ["string", "null"],
+      "description": "Directory of skill Markdown files. Each .md file becomes a skill."
+    }
+  },
+  "definitions": {
+    "mcpServer": {
+      "oneOf": [
+        { "$ref": "#/definitions/stdioServer" },
+        { "$ref": "#/definitions/sseServer" },
+        { "$ref": "#/definitions/streamableHttpServer" }
+      ]
+    },
+    "serverId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for this server."
+    },
+    "serverName": {
+      "type": "string",
+      "description": "Display name (defaults to id)."
+    },
+    "serverDescription": {
+      "type": "string",
+      "description": "What this server does."
+    },
+    "stdioServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "command"],
+      "properties": {
+        "id": { "$ref": "#/definitions/serverId" },
+        "name": { "$ref": "#/definitions/serverName" },
+        "description": { "$ref": "#/definitions/serverDescription" },
+        "transport": {
+          "const": "stdio",
+          "description": "Local subprocess transport (default when omitted)."
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Command to run (e.g. npx, python)."
+        },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Command-line arguments."
+        },
+        "envVars": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Map of host env var name to subprocess env var name."
+        }
+      }
+    },
+    "sseServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "transport", "url"],
+      "properties": {
+        "id": { "$ref": "#/definitions/serverId" },
+        "name": { "$ref": "#/definitions/serverName" },
+        "description": { "$ref": "#/definitions/serverDescription" },
+        "transport": {
+          "const": "sse",
+          "description": "Legacy SSE transport for remote servers."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "SSE endpoint URL."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Map of header name to host env var name."
+        }
+      }
+    },
+    "streamableHttpServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "transport", "url"],
+      "properties": {
+        "id": { "$ref": "#/definitions/serverId" },
+        "name": { "$ref": "#/definitions/serverName" },
+        "description": { "$ref": "#/definitions/serverDescription" },
+        "transport": {
+          "const": "streamable-http",
+          "description": "Streamable HTTP transport (recommended for remote servers)."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "HTTP endpoint URL."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Map of header name to host env var name."
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { trace, metrics, context, propagation, SpanStatusCode, type AttributeValue } from "@opentelemetry/api";
+import { trace, metrics, context, propagation, SpanStatusCode, type AttributeValue, type Histogram, type Counter, type Span } from "@opentelemetry/api";
 import type { ToolCallOutcome } from "./types.js";
 import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
@@ -26,12 +26,8 @@ export class Telemetry {
   private tracerProvider: NodeTracerProvider | null = null;
   private meterProvider: MeterProvider | null = null;
   private started = false;
-  private toolCallHistogram: ReturnType<
-    ReturnType<typeof metrics.getMeter>["createHistogram"]
-  > | null = null;
-  private toolCallCounter: ReturnType<
-    ReturnType<typeof metrics.getMeter>["createCounter"]
-  > | null = null;
+  private toolCallHistogram: Histogram | null = null;
+  private toolCallCounter: Counter | null = null;
 
   async start(options: TelemetryOptions): Promise<void> {
     if (this.started) return;
@@ -77,7 +73,7 @@ export class Telemetry {
   startActiveSpan<T>(
     name: string,
     attrs: Attributes,
-    fn: (span: import("@opentelemetry/api").Span) => Promise<T>,
+    fn: (span: Span) => Promise<T>,
     traceparent?: string,
     tracestate?: string,
   ): Promise<T> {

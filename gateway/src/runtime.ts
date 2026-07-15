@@ -38,7 +38,6 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
 
   private configWatcher: ConfigWatcher;
   private envFile: EnvFile;
-  private currentEnv: Record<string, string | undefined>;
   private currentConfigFile: GatewayConfigFile;
   private configReloadTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingConfigFile: GatewayConfigFile | undefined;
@@ -57,11 +56,9 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
     this.telemetry = observers?.telemetry ?? null;
     this.audit = observers?.audit ?? null;
 
-    // Build initial env and config file snapshot
-    const envVars = this.envFile.load();
-    this.currentEnv = { ...envVars, ...process.env };
+    // Build initial config file snapshot
     this.currentConfigFile = {
-      mcpServers: config.mcpServers.map((s) => this.toConfigFileServer(s)),
+      mcpServers: [...config.mcpServers],
       skillsDir: config.skillsDir,
     };
   }
@@ -74,7 +71,14 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
 
     for (const definition of this.config.mcpServers) {
       const env = this.config.mcpEnvVars.get(definition.id) ?? {};
-      await this.startMcpClient(definition, env);
+      try {
+        await this.startMcpClient(definition, env);
+      } catch (err) {
+        this.logger.error(
+          `Failed to start integration "${definition.id}", skipping`,
+          { error: err instanceof Error ? err.message : String(err) }
+        );
+      }
     }
 
     await this.skillClient.load();
@@ -196,7 +200,12 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
       this.scheduleChangeCheck();
     });
 
-    await mcpClient.start();
+    try {
+      await mcpClient.start();
+    } catch (err) {
+      await mcpClient.stop().catch(() => {});
+      throw err;
+    }
     await this.audit?.log({
       type: "process",
       action: "start",
@@ -281,7 +290,6 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
     const currentIds = new Set(this.config.mcpServers.map((s) => s.id));
     const newIds = new Set(mcpServers.map((s) => s.id));
     const newServerMap = new Map(mcpServers.map((s) => [s.id, s]));
-    const newEnvMap = mcpEnvVars;
     const currentServerMap = new Map(this.config.mcpServers.map((s) => [s.id, s]));
 
     // Determine removed, added, and potentially changed servers
@@ -300,7 +308,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
       const oldServer = currentServerMap.get(id)!;
       const newServer = newServerMap.get(id)!;
       const oldEnv = this.config.mcpEnvVars.get(id) ?? {};
-      const newResolvedEnv = newEnvMap.get(id) ?? {};
+      const newResolvedEnv = mcpEnvVars.get(id) ?? {};
 
       if (
         !serverConfigEqual(oldServer, newServer) ||
@@ -321,7 +329,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
     // Start added servers
     for (const id of added) {
       const server = newServerMap.get(id)!;
-      const resolvedEnv = newEnvMap.get(id) ?? {};
+      const resolvedEnv = mcpEnvVars.get(id) ?? {};
       this.logger.info(`Adding MCP server "${id}"`);
       try {
         await this.startMcpClient(server, resolvedEnv);
@@ -336,20 +344,9 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
     this.config.mcpServers = mcpServers;
     this.config.mcpEnvVars = mcpEnvVars;
     this.currentConfigFile = configFile;
-    this.currentEnv = newEnv;
 
     // Recompute versions and notify
     this.scheduleChangeCheck();
-  }
-
-  /**
-   * Convert a McpServerConfig back to the shape stored in GatewayConfigFile.
-   * Used to build the initial currentConfigFile snapshot.
-   */
-  private toConfigFileServer(
-    server: McpServerConfig
-  ): GatewayConfigFile["mcpServers"][number] {
-    return server;
   }
 
   private scheduleChangeCheck(): void {

@@ -40,8 +40,8 @@ async def test_pull_versions(server_and_gateway):
     server = server_and_gateway
     gw = server.connected_gateways[0]
     versions = await server.get_versions(gw.id)
-    assert versions["mcp_version"] is None
-    assert versions["skills_version"] is None
+    assert versions["mcpVersion"] is None
+    assert versions["skillsVersion"] is None
 
 
 @pytest.mark.asyncio
@@ -67,29 +67,56 @@ async def test_rejects_invalid_token():
         stderr=subprocess.PIPE,
     )
 
-    # Gateway should exit with non-zero code
+    # Poll without blocking the event loop, so the in-process server can
+    # process the connection and reject the token.
     try:
-        code = proc.wait(timeout=10)
+        code = None
+        for _ in range(100):
+            code = proc.poll()
+            if code is not None:
+                break
+            await asyncio.sleep(0.1)
+        if code is None:
+            proc.kill()
+            pytest.fail("Gateway did not exit after invalid token")
         assert code != 0
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        pytest.fail("Gateway did not exit after invalid token")
     finally:
         await server.stop()
 
 
 @pytest.mark.asyncio
-async def test_detects_disconnect(server_and_gateway):
-    server = server_and_gateway
-    assert len(server.connected_gateways) == 1
+async def test_detects_disconnect():
+    async def validate(token: str) -> TokenValidationResult | None:
+        return TokenValidationResult(organization_id="org_1") if token == "gw_test" else None
 
+    server = GatewayServer(validate_token=validate, port=0, ping_interval=0)
     disconnected = asyncio.Event()
     server.on_gateway_disconnected = lambda _gw: disconnected.set()
+    await server.start()
 
-    # Find and kill the gateway process — fixture holds it, but we can just
-    # close the underlying websocket for the connected gateway.
-    # Instead, we access the internal _connections to close the ws.
-    # Simpler: just stop the server (which closes all connections).
-    # But that changes the fixture state. Let's just verify the callback
-    # attribute exists and is callable.
-    assert hasattr(server, "on_gateway_disconnected")
+    proc = subprocess.Popen(
+        ["node", GATEWAY_BIN],
+        env={
+            **os.environ,
+            "JOURNAL_GATEWAY_TOKEN": "gw_test",
+            "JOURNAL_GATEWAY_URL": server.url,
+            "JOURNAL_GATEWAY_CONFIG": "{}",
+            "LOG_LEVEL": "error",
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        for _ in range(100):
+            if server.connected_gateways:
+                break
+            await asyncio.sleep(0.1)
+        assert len(server.connected_gateways) == 1
+
+        proc.terminate()
+        await asyncio.wait_for(disconnected.wait(), timeout=10)
+        assert len(server.connected_gateways) == 0
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        await server.stop()

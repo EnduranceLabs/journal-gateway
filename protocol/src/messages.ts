@@ -3,7 +3,7 @@ import { GatewayErrorSchema } from "./errors.js";
 import { IntegrationSchema, ToolResultSchema } from "./integrations.js";
 import { SkillSchema } from "./skills.js";
 
-// --- Gateway → Service messages ---
+// --- Gateway -> Service messages ---
 
 export const AuthenticateMessageSchema = z.object({
   type: z.literal("authenticate"),
@@ -84,7 +84,7 @@ export const GatewayMessageSchema = z.discriminatedUnion("type", [
 
 export type GatewayMessage = z.infer<typeof GatewayMessageSchema>;
 
-// --- Service → Gateway messages ---
+// --- Service -> Gateway messages ---
 
 export const AuthenticatedMessageSchema = z.object({
   type: z.literal("authenticated"),

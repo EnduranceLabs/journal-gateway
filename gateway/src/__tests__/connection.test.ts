@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GatewayConnection, AuthenticationError } from "../connection.js";
 import type { GatewayConfig, IntegrationProvider, GatewayVersions, Skill } from "@journal.one/gateway-protocol";
 import { EventEmitter } from "node:events";
@@ -100,10 +100,6 @@ describe("GatewayConnection", () => {
     vi.clearAllMocks();
     mockWsInstances = [];
     mockWsFactory = null;
-  });
-
-  afterEach(async () => {
-    // Cleanup
   });
 
   it("completes full connection lifecycle", async () => {

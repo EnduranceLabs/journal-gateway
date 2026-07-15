@@ -3,6 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+echo "Checking version lockstep across all four packages..."
+"$ROOT/packaging/check-lockstep.sh"
+
 echo "Checking npm login..."
 if ! npm whoami >/dev/null 2>&1; then
   echo "You are not logged in to npm. Run:" >&2
