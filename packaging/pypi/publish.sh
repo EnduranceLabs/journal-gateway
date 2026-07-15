@@ -4,6 +4,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+echo "Checking version lockstep across all four packages..."
+"$ROOT/packaging/check-lockstep.sh"
+
 cd "$ROOT/clients/python"
 
 echo "Cleaning previous build artifacts..."

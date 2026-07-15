@@ -6,7 +6,9 @@ All packages release in **lockstep** — the same version number every time, so 
 customer can trust that `@journal.one/gateway` 0.7.0, `@journal.one/gateway-client`
 0.7.0, and `journal-gateway-client` 0.7.0 speak the same protocol. Bump them
 together with the script below; never edit versions by hand (that is how the Python
-client silently drifted to 0.2.0 while the npm packages were at 0.6.0).
+client silently drifted to 0.2.0 while the npm packages were at 0.6.0). Both the npm and
+PyPI publish scripts run `packaging/check-lockstep.sh` and refuse to publish if the four
+versions disagree.
 
 ## Packages
 
