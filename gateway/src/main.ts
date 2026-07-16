@@ -99,6 +99,9 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const logger = new Logger(config.logLevel);
+  for (const warning of config.warnings) {
+    logger.warn(warning);
+  }
 
   const telemetry = new Telemetry();
   await telemetry.start({

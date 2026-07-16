@@ -63,8 +63,8 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
   ) {
     super();
     this.logger = new Logger(config.logLevel);
-    this.skillClient = new SkillClient(config.skillsDir);
-    this.configWatcher = new ConfigWatcher(configFilePath ?? null);
+    this.skillClient = new SkillClient(config.skillsDir, this.logger);
+    this.configWatcher = new ConfigWatcher(configFilePath ?? null, this.logger);
     this.envFile = new EnvFile(envFilePath ?? null);
     this.telemetry = observers?.telemetry ?? null;
     this.audit = observers?.audit ?? null;
@@ -202,10 +202,11 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
     const mcpClient = new McpClient(definition, env, this.logger);
 
     mcpClient.on("crash", (error) => {
-      this.logger.error(`Integration "${definition.id}" crashed`, {
-        error: error.message,
+      this.handleMcpCrash(definition, env, mcpClient, error).catch((err) => {
+        this.logger.error(`Error handling crash for integration "${definition.id}"`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
-      this.scheduleChangeCheck();
     });
 
     mcpClient.on("tools_changed", () => {
@@ -225,6 +226,31 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
       integrationId: definition.id,
     });
     this.processes.set(definition.id, mcpClient);
+  }
+
+  private async handleMcpCrash(
+    definition: McpServerConfig,
+    env: Record<string, string>,
+    mcpClient: McpClient,
+    error: Error
+  ): Promise<void> {
+    if (this.processes.get(definition.id) !== mcpClient) return;
+
+    this.logger.error(`Integration "${definition.id}" crashed`, {
+      error: error.message,
+    });
+    this.processes.delete(definition.id);
+    await this.audit?.log({
+      type: "process",
+      action: "stop",
+      integrationId: definition.id,
+    });
+    await mcpClient.stop().catch(() => {});
+    this.scheduleChangeCheck();
+
+    if (!this.stopped) {
+      this.scheduleMcpRetry(definition, env, 1);
+    }
   }
 
   private async startMcpClientWithRetry(
@@ -274,7 +300,7 @@ export class Runtime extends EventEmitter<RuntimeEvents> implements IntegrationP
       }
 
       this.retrying.delete(definition.id);
-      this.logger.info(`Retrying MCP server "${definition.id}" after failed start`, {
+      this.logger.info(`Retrying MCP server "${definition.id}"`, {
         attempt,
       });
       this.startMcpClientWithRetry(retry.definition, retry.env, {

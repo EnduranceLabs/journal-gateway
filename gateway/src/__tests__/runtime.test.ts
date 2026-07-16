@@ -9,6 +9,7 @@ const mcpClientInstances: Array<{
   id: string;
   emitter: EventEmitter;
   getTools: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
 }> = [];
 const startFailures = new Map<string, number>();
 
@@ -41,9 +42,10 @@ vi.mock("../mcp-client.js", () => {
         }
         return Promise.resolve();
       });
+      const stop = vi.fn().mockResolvedValue(undefined);
       const instance = {
         start,
-        stop: vi.fn().mockResolvedValue(undefined),
+        stop,
         getTools,
         callTool: vi.fn().mockResolvedValue({
           content: [{ type: "text", text: "result" }],
@@ -54,7 +56,7 @@ vi.mock("../mcp-client.js", () => {
         off: emitter.off.bind(emitter),
         emit: emitter.emit.bind(emitter),
       };
-      mcpClientInstances.push({ id: definition.id, emitter, getTools });
+      mcpClientInstances.push({ id: definition.id, emitter, getTools, stop });
       return instance;
     }),
   };
@@ -144,6 +146,7 @@ function makeConfig(integrations: McpServerConfig[] = [testIntegration]): Runtim
       integrations.map((i) => [i.id, { DATABASE_URL: "postgresql://localhost/test" }])
     ),
     skillsDir: null,
+    warnings: [],
   };
 }
 
@@ -207,6 +210,42 @@ describe("Runtime", () => {
       const tools = await runtime.getTools();
       expect(tools.map((t) => t.id)).toEqual(["flaky"]);
       expect(mcpClientInstances.filter((i) => i.id === "flaky")).toHaveLength(2);
+    } finally {
+      await runtime.stop();
+      vi.useRealTimers();
+    }
+  });
+
+  it("removes and retries an integration that crashes after startup", async () => {
+    vi.useFakeTimers();
+    const runtime = new Runtime(makeConfig());
+
+    try {
+      await runtime.start();
+      expect(await runtime.getTools()).toHaveLength(1);
+
+      const removedPromise = new Promise<void>((resolve) => {
+        runtime.once("versions_changed", resolve);
+      });
+
+      const crashed = mcpClientInstances[0];
+      crashed.emitter.emit("crash", new Error("transport closed"));
+      await vi.advanceTimersByTimeAsync(500);
+      await removedPromise;
+
+      expect(crashed.stop).toHaveBeenCalled();
+      expect(await runtime.getTools()).toHaveLength(0);
+
+      const restoredPromise = new Promise<void>((resolve) => {
+        runtime.once("versions_changed", resolve);
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(500);
+      await restoredPromise;
+
+      const tools = await runtime.getTools();
+      expect(tools.map((t) => t.id)).toEqual(["test-db"]);
+      expect(mcpClientInstances.filter((i) => i.id === "test-db")).toHaveLength(2);
     } finally {
       await runtime.stop();
       vi.useRealTimers();

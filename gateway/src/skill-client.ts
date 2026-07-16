@@ -3,6 +3,7 @@ import { watch, type FSWatcher } from "node:fs";
 import { join, basename } from "node:path";
 import { EventEmitter } from "node:events";
 import type { Skill, Integration } from "journal-gateway-protocol";
+import type { Logger } from "./common/logger.js";
 
 export interface SkillClientEvents {
   skills_changed: [];
@@ -13,7 +14,10 @@ export class SkillClient extends EventEmitter<SkillClientEvents> {
   private watcher: FSWatcher | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private skillsDir: string | null) {
+  constructor(
+    private skillsDir: string | null,
+    private logger?: Pick<Logger, "warn">
+  ) {
     super();
   }
 
@@ -32,27 +36,58 @@ export class SkillClient extends EventEmitter<SkillClientEvents> {
       return;
     }
 
-    this.skills = await Promise.all(
-      files.map(async (file) => ({
-        id: basename(file, ".md"),
-        content: await readFile(join(this.skillsDir!, file), "utf-8"),
-      }))
-    );
+    const skills: Skill[] = [];
+    for (const file of files) {
+      const filePath = join(this.skillsDir, file);
+      try {
+        skills.push({
+          id: basename(file, ".md"),
+          content: await readFile(filePath, "utf-8"),
+        });
+      } catch (err) {
+        this.logger?.warn("Skill file load failed, skipping file", {
+          file: filePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    this.skills = skills;
   }
 
   startWatching(): void {
     if (this.watcher || !this.skillsDir) return;
 
-    this.watcher = watch(this.skillsDir, (eventType, filename) => {
-      if (!filename || !filename.endsWith(".md")) return;
+    try {
+      this.watcher = watch(this.skillsDir, (eventType, filename) => {
+        if (!filename || !filename.endsWith(".md")) return;
 
-      if (this.debounceTimer) clearTimeout(this.debounceTimer);
-      this.debounceTimer = setTimeout(async () => {
-        this.debounceTimer = null;
-        await this.load();
-        this.emit("skills_changed");
-      }, 500);
-    });
+        if (this.debounceTimer) clearTimeout(this.debounceTimer);
+        this.debounceTimer = setTimeout(async () => {
+          this.debounceTimer = null;
+          try {
+            await this.load();
+          } catch (err) {
+            this.logger?.warn("Skill directory reload failed, keeping current skills", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+            return;
+          }
+          this.emit("skills_changed");
+        }, 500);
+      });
+
+      this.watcher.on("error", (err) => {
+        this.logger?.warn("Skill directory watcher failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        this.stopWatching();
+      });
+    } catch (err) {
+      this.logger?.warn("Skill directory watcher failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      this.watcher = null;
+    }
   }
 
   stopWatching(): void {

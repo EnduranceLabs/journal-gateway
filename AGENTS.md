@@ -32,8 +32,8 @@ is a standalone package.
 
 ```bash
 pnpm install
-pnpm build            # build the gateway
-pnpm typecheck
+pnpm build            # build protocol and gateway
+pnpm typecheck        # protocol, gateway, and TS client
 pnpm test             # gateway tests
 pnpm test:client      # TypeScript client tests
 pnpm test:integration # TypeScript integration (gateway <-> TS client)
@@ -46,7 +46,8 @@ If your default `python3` is older than 3.11, prefix Python-dependent commands
 with `PYTHON=/path/to/python3.11`, for example
 `PYTHON=/opt/homebrew/bin/python3.12 pnpm test:all`.
 
-Run `pnpm -r build` (or at least `pnpm -r typecheck`) before opening a PR.
+Run `pnpm build`, `pnpm build:client`, and `pnpm typecheck` before opening a
+PR. Use `pnpm -r build` when you need every TypeScript workspace package built.
 The Docker database end-to-end tests are separate from `pnpm test:all`.
 
 ## Conventions that are easy to get wrong

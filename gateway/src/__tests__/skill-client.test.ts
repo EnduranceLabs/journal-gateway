@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm, unlink } from "node:fs/promises";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { mkdtemp, writeFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SkillClient } from "../skill-client.js";
@@ -99,6 +99,25 @@ Follow these steps to review.`;
     const integrations = client.getIntegrations();
     expect(integrations).toHaveLength(1);
     expect(integrations[0].skills![0].id).toBe("actual-skill");
+  });
+
+  it("skips skill files that cannot be read", async () => {
+    const logger = { warn: vi.fn() };
+    await writeFile(join(tempDir, "ok.md"), "Usable skill");
+    await symlink(join(tempDir, "missing.md"), join(tempDir, "broken.md"));
+
+    const client = new SkillClient(tempDir, logger);
+    await client.load();
+    const integrations = client.getIntegrations();
+
+    expect(integrations).toHaveLength(1);
+    expect(integrations[0].skills).toEqual([
+      { id: "ok", content: "Usable skill" },
+    ]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Skill file load failed, skipping file",
+      expect.objectContaining({ file: join(tempDir, "broken.md") })
+    );
   });
 });
 

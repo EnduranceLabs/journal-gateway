@@ -15,8 +15,8 @@ architecture lives in `ARCHITECTURE.md`. The command reference below mirrors
 All commands run from the repository root:
 
 ```bash
-pnpm build            # build the gateway package (gateway only)
-pnpm typecheck        # type-check the gateway package (gateway only)
+pnpm build            # build protocol and gateway
+pnpm typecheck        # protocol, gateway, and TS client
 pnpm test             # gateway tests
 pnpm test:client      # TypeScript client tests
 pnpm test:integration # TypeScript integration (gateway <-> TS client)

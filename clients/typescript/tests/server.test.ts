@@ -31,6 +31,12 @@ function connectAndAuth(
   });
 }
 
+function waitForClose(ws: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    ws.once("close", () => resolve());
+  });
+}
+
 /**
  * Send version_changed and handle any pull requests from the server.
  * This replaces the old register() helper.
@@ -126,6 +132,39 @@ describe("GatewayServer", () => {
     await expect(connectAndAuth(server.url, "gw_invalid")).rejects.toThrow(
       "Auth failed"
     );
+  });
+
+  it("surfaces async connection handler failures via onSocketError", async () => {
+    await server.stop();
+
+    const errors: Array<{ error: Error; gateway: ConnectedGateway | null }> = [];
+    server = new GatewayServer({
+      port: 0,
+      validateToken: async () => {
+        throw new Error("token validator unavailable");
+      },
+      pingIntervalMs: 0,
+      onSocketError: (error, gateway) => errors.push({ error, gateway }),
+    });
+    await server.start();
+
+    const ws = new WebSocket(server.url);
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    ws.send(JSON.stringify({
+      type: "authenticate",
+      token: "gw_valid",
+      protocolVersion: 2,
+      gatewayVersion: "0.1.0-test",
+    }));
+
+    await waitForClose(ws);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0].error.message).toBe("token validator unavailable");
+    expect(errors[0].gateway).toBeNull();
   });
 
   it("callTool returns result", async () => {

@@ -207,21 +207,17 @@ describe("parseConfig", () => {
     ).toThrow("JOURNAL_GATEWAY_CONFIG is not valid JSON");
   });
 
-  it("warns when no servers or skills are configured", () => {
-    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: "{}" }), []);
-    expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining("no mcpServers or skillsDir configured")
-    );
-    spy.mockRestore();
+  it("records a warning when no servers or skills are configured", () => {
+    const config = parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: "{}" }), []);
+    expect(config.warnings).toEqual([
+      "No mcpServers or skillsDir configured; the gateway will connect without tools or skills.",
+    ]);
   });
 
-  it("does not warn when servers or skills are configured", () => {
-    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("records no warnings when servers or skills are configured", () => {
     const inline = JSON.stringify({ skillsDir: "/opt/skills" });
-    parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), []);
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
+    const config = parseConfig(baseEnv({ JOURNAL_GATEWAY_CONFIG: inline }), []);
+    expect(config.warnings).toEqual([]);
   });
 
   // --- Backward compatibility ---

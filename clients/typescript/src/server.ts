@@ -1,4 +1,4 @@
-import { WebSocketServer, WebSocket } from "ws";
+import { WebSocketServer, WebSocket, type RawData } from "ws";
 import type { Integration, ToolDefinition, ToolResult, Skill } from "./types.js";
 import { GatewayMessageSchema } from "./types.js";
 
@@ -29,9 +29,9 @@ export interface GatewayServerOptions {
    */
   getTraceContext?: () => TraceContext | null;
   /**
-   * Called when a gateway socket emits an `error` event (e.g. ECONNRESET).
-   * `gateway` is `null` if the socket errored before completing the
-   * handshake. When not provided, socket errors are dropped — the library
+   * Called for gateway socket errors and unexpected connection-handler
+   * failures. `gateway` is `null` if the failure happened before completing
+   * the handshake. When not provided, diagnostics are dropped — the library
    * never logs on its own.
    */
   onSocketError?: (error: Error, gateway: ConnectedGateway | null) => void;
@@ -404,6 +404,15 @@ export class GatewayServer {
     }
   }
 
+  private reportSocketError(error: unknown, gateway: ConnectedGateway | null): void {
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    try {
+      this.options.onSocketError?.(normalized, gateway);
+    } catch {
+      // Diagnostic callbacks are user code; never let them crash the host.
+    }
+  }
+
   private async autoPull(connId: string): Promise<void> {
     const entry = this.gateways.get(connId);
     if (!entry) return;
@@ -480,7 +489,7 @@ export class GatewayServer {
       }
     }, 10_000);
 
-    ws.on("message", async (data) => {
+    const handleMessage = async (data: RawData): Promise<void> => {
       let msg;
       try {
         msg = GatewayMessageSchema.parse(JSON.parse(data.toString()));
@@ -648,11 +657,18 @@ export class GatewayServer {
           break;
         }
       }
+    };
+
+    ws.on("message", (data) => {
+      void handleMessage(data).catch((err) => {
+        this.reportSocketError(err, this.gateways.get(connId)?.gateway ?? null);
+        ws.close();
+      });
     });
 
     // An "error" event with no listener crashes the host process.
     ws.on("error", (err: Error) => {
-      this.options.onSocketError?.(err, this.gateways.get(connId)?.gateway ?? null);
+      this.reportSocketError(err, this.gateways.get(connId)?.gateway ?? null);
     });
 
     ws.on("close", (code: number, reason: Buffer) => {
