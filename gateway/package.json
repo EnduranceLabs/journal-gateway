@@ -1,6 +1,6 @@
 {
   "name": "journal-gateway",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Outbound gateway for connecting MCP servers and skills to Journal",
   "license": "MIT",
   "type": "module",
