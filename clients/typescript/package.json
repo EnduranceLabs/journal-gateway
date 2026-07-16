@@ -1,6 +1,6 @@
 {
   "name": "journal-gateway-client",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "TypeScript service-side client for accepting Journal Gateway connections",
   "license": "MIT",
   "type": "module",
