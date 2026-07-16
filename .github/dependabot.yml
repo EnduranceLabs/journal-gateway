@@ -16,6 +16,7 @@ updates:
           - "@opentelemetry/*"
           - "@protobufjs/*"
           - "@hono/node-server"
+          - dotenv
           - express-rate-limit
           - fast-uri
           - hono
@@ -24,6 +25,7 @@ updates:
           - protobufjs
           - qs
           - ws
+          - zod
       test-tooling:
         dependency-type: development
         patterns:
@@ -42,3 +44,11 @@ updates:
         patterns:
           - "@types/*"
           - typescript
+    ignore:
+      # zod is a public-API dependency: journal-gateway-protocol exports zod
+      # schemas that the Journal monorepo consumes. A zod major (v3 -> v4) is not
+      # wire/type-compatible across a mixed tree and must be a coordinated,
+      # cross-repo protocol bump — never an automated PR. Security patches (minor/
+      # patch) still flow.
+      - dependency-name: "zod"
+        update-types: ["version-update:semver-major"]
