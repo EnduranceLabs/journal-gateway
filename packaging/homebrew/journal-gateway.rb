@@ -2,10 +2,8 @@ class JournalGateway < Formula
   desc "Connect your tools to the Journal agent via an outbound WebSocket gateway"
   homepage "https://github.com/EnduranceLabs/journal-gateway"
   # url and sha256 are updated by packaging/homebrew/publish.sh.
-  # Version 0.7.0 was published under the previous scoped npm name; the next
-  # formula update will point at the unscoped journal-gateway tarball.
-  url "https://registry.npmjs.org/journal-gateway/-/journal-gateway-0.8.0.tgz"
-  sha256 "f98ba9d77f56a5cf2abff6aaea93cbee6801e6c2f497527d9b5b32bfd5d7d945"
+  url "https://registry.npmjs.org/journal-gateway/-/journal-gateway-0.8.1.tgz"
+  sha256 "b27d1445ca82eaed906363c881f9e1f04f3fc578e994fccb99b3c8cf2d285086"
   license "MIT"
 
   depends_on "node@22"

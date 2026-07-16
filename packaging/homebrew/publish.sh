@@ -13,5 +13,6 @@ echo "Updating formula for version ${VERSION}..."
 sed -i '' "s|url \".*\"|url \"${TARBALL_URL}\"|" "${FORMULA}"
 sed -i '' "s|sha256 \".*\"|sha256 \"${SHA256}\"|" "${FORMULA}"
 
-echo "Formula updated. Push to ${TAP_REPO} to publish."
+echo "Formula updated locally. This script does not push to Homebrew."
+echo "Before publishing, verify that ${TAP_REPO} is the correct tap and that you have access."
 echo "Done."
