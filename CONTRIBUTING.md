@@ -17,6 +17,9 @@ pnpm build:client
 # Type check protocol, gateway, and TypeScript client
 pnpm typecheck
 
+# Check lockfile policy
+pnpm check:lockfiles
+
 # Run gateway tests
 pnpm test
 
@@ -39,6 +42,13 @@ testing/e2e/run-all.sh
 If your default `python3` is older than 3.11, prefix Python-dependent commands
 with `PYTHON=/path/to/python3.11`, for example
 `PYTHON=/opt/homebrew/bin/python3.12 pnpm test:all`.
+
+## Lockfile Policy
+
+This repo uses one pnpm workspace lockfile: `pnpm-lock.yaml` at the repository
+root. Do not commit package-local pnpm lockfiles such as
+`gateway/pnpm-lock.yaml`; workspace installs, Docker builds, version bumps, and
+publish scripts all use the root lockfile.
 
 ## Architecture
 
@@ -134,3 +144,4 @@ docker build -f packaging/docker/Dockerfile -t journal-gateway .
 ## Pre-PR checklist
 
 - Run `pnpm build`, `pnpm build:client`, and `pnpm typecheck` before opening a PR or publishing. Use `pnpm -r build` when you need every TypeScript workspace package built.
+- Run `pnpm check:lockfiles` before opening a PR.

@@ -1,7 +1,7 @@
 import { trace, metrics, context, propagation, SpanStatusCode, type AttributeValue, type Histogram, type Counter, type Span } from "@opentelemetry/api";
 import type { ToolCallOutcome } from "./types.js";
-import { Resource } from "@opentelemetry/resources";
-import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+import { resourceFromAttributes } from "@opentelemetry/resources";
+import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import {
@@ -34,22 +34,24 @@ export class Telemetry {
     if (options.disabled) return;
     if (!options.endpoint) return;
 
-    const resource = new Resource({
-      [SemanticResourceAttributes.SERVICE_NAME]: options.serviceName ?? "journal-gateway",
+    const resource = resourceFromAttributes({
+      [ATTR_SERVICE_NAME]: options.serviceName ?? "journal-gateway",
       ...options.resourceAttributes,
     });
 
     const traceExporter = new OTLPTraceExporter({ url: options.endpoint + "/v1/traces" });
     const metricExporter = new OTLPMetricExporter({ url: options.endpoint + "/v1/metrics" });
 
-    this.tracerProvider = new NodeTracerProvider({ resource });
-    this.tracerProvider.addSpanProcessor(new BatchSpanProcessor(traceExporter));
+    this.tracerProvider = new NodeTracerProvider({
+      resource,
+      spanProcessors: [new BatchSpanProcessor(traceExporter)],
+    });
     this.tracerProvider.register();
 
-    this.meterProvider = new MeterProvider({ resource });
-    this.meterProvider.addMetricReader(
-      new PeriodicExportingMetricReader({ exporter: metricExporter })
-    );
+    this.meterProvider = new MeterProvider({
+      resource,
+      readers: [new PeriodicExportingMetricReader({ exporter: metricExporter })],
+    });
     metrics.setGlobalMeterProvider(this.meterProvider);
 
     const meter = metrics.getMeter("gateway");

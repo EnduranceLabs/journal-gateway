@@ -1,0 +1,44 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    groups:
+      runtime-dependencies:
+        dependency-type: production
+        patterns:
+          - "@modelcontextprotocol/sdk"
+          - "@opentelemetry/*"
+          - "@protobufjs/*"
+          - "@hono/node-server"
+          - express-rate-limit
+          - fast-uri
+          - hono
+          - ip-address
+          - path-to-regexp
+          - protobufjs
+          - qs
+          - ws
+      test-tooling:
+        dependency-type: development
+        patterns:
+          - "@esbuild/*"
+          - "@rollup/*"
+          - "@vitest/*"
+          - vitest
+          - vite
+          - vite-node
+          - rollup
+          - esbuild
+          - postcss
+          - picomatch
+      typescript-tooling:
+        dependency-type: development
+        patterns:
+          - "@types/*"
+          - typescript

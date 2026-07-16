@@ -34,6 +34,7 @@ is a standalone package.
 pnpm install
 pnpm build            # build protocol and gateway
 pnpm typecheck        # protocol, gateway, and TS client
+pnpm check:lockfiles  # ensure the root pnpm lockfile is the only lockfile
 pnpm test             # gateway tests
 pnpm test:client      # TypeScript client tests
 pnpm test:integration # TypeScript integration (gateway <-> TS client)
@@ -48,6 +49,7 @@ with `PYTHON=/path/to/python3.11`, for example
 
 Run `pnpm build`, `pnpm build:client`, and `pnpm typecheck` before opening a
 PR. Use `pnpm -r build` when you need every TypeScript workspace package built.
+This repo uses one pnpm lockfile: `pnpm-lock.yaml` at the repository root.
 The Docker database end-to-end tests are separate from `pnpm test:all`.
 
 ## Conventions that are easy to get wrong

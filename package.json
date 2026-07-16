@@ -13,6 +13,7 @@
     "test:integration": "pnpm build && pnpm build:client && pnpm --filter ./testing/integration/ts test",
     "test:python": "cd clients/python && PYTHON_BIN=${PYTHON:-python3} && \"$PYTHON_BIN\" -c \"import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 'Python 3.11+ required; set PYTHON=/path/to/python3.11')\" && \"$PYTHON_BIN\" -m venv .venv && . .venv/bin/activate && python -m pip install -q --upgrade pip && python -m pip install -q -e \".[dev]\" && pytest tests/",
     "test:all": "pnpm test && pnpm test:client && pnpm test:integration && pnpm test:python",
-    "typecheck": "pnpm --filter=journal-gateway-protocol build && pnpm --filter=journal-gateway --filter=journal-gateway-client typecheck"
+    "typecheck": "pnpm --filter=journal-gateway-protocol build && pnpm --filter=journal-gateway --filter=journal-gateway-client typecheck",
+    "check:lockfiles": "scripts/check-lockfiles.sh"
   }
 }
