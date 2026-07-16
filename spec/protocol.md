@@ -307,7 +307,7 @@ Request skills from the gateway.
 
 #### `tool_call`
 
-Sent to invoke a tool on a registered integration.
+Sent to invoke a tool on a known integration.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -351,7 +351,11 @@ The canonical definitions live in `protocol/src/` as Zod schemas. The tables bel
 
 ### Integration
 
-An integration is the umbrella concept for capabilities added to the gateway. It provides tools (callable by the agent).
+An integration groups a set of tools the agent can call. The gateway's `tools`
+response carries MCP tool integrations. A client library may additionally
+synthesize a local `skills` integration in its public gateway state after handling
+the separate `skills` response; that integration is a client-side convenience and
+never appears on the wire.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -359,7 +363,7 @@ An integration is the umbrella concept for capabilities added to the gateway. It
 | `name` | `string` | yes | Display name |
 | `description` | `string` | yes | Human-readable description |
 | `tools` | `ToolDefinition[]` | yes | Tools provided by this integration |
-| `skills` | `Skill[]` | no | Skills (prompt templates) provided by this integration |
+| `skills` | `Skill[]` | no | Client-synthesized only; never sent on the wire |
 
 ### ToolDefinition
 
@@ -419,8 +423,8 @@ A prompt/workflow template that guides agent behavior. Skills are raw Markdown c
 | Pull response | 30s | Time for gateway to respond to a pull request |
 | Heartbeat interval | 30s | Service sends `ping` every 30s |
 | Pong timeout | 10s | Gateway must respond to `ping` within 10s |
-| Tool call (gateway) | 60s | Gateway must respond to `tool_call` within 60s |
-| Tool call (service) | 90s | Service waits up to 90s for tool result |
+| Tool call (gateway) | 60s | Gateway-side execution cap for a `tool_call` |
+| Tool call (service/client) | client-defined | Client libraries let callers override this; TypeScript defaults to 90s, Python `call_tool_for_org` defaults to 90s, and Python `call_tool` defaults to 60s |
 
 ## Reconnection
 
@@ -442,7 +446,7 @@ Similarly, multiple pull requests (`get_versions`, `get_tools`, `get_skills`) ma
 
 | Code | Description |
 |------|-------------|
-| `INTEGRATION_NOT_FOUND` | The requested `integrationId` is not registered |
+| `INTEGRATION_NOT_FOUND` | The requested `integrationId` is not known to the gateway |
 | `TOOL_NOT_FOUND` | The requested `toolName` does not exist on the integration |
 | `EXECUTION_FAILED` | Tool execution threw an error |
 | `TIMEOUT` | Tool execution exceeded the timeout |

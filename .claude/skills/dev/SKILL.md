@@ -6,64 +6,34 @@ user-invocable: false
 
 # Development Reference
 
+Shared agent instructions and release rules live in `AGENTS.md`; module-by-module
+architecture lives in `ARCHITECTURE.md`. The command reference below mirrors
+`AGENTS.md`.
+
 ## Commands
 
 All commands run from the repository root:
 
 ```bash
-pnpm build       # Build the gateway package
-pnpm test        # Run all tests with vitest
-pnpm typecheck   # TypeScript type checking
+pnpm build            # build the gateway package (gateway only)
+pnpm typecheck        # type-check the gateway package (gateway only)
+pnpm test             # gateway tests
+pnpm test:client      # TypeScript client tests
+pnpm test:integration # TypeScript integration (gateway <-> TS client)
+pnpm test:python      # Python client tests
+pnpm test:all         # root-script suites above
+testing/e2e/run-all.sh # Docker database end-to-end tests (requires Docker)
 ```
 
 ## Project Structure
 
-```
-gateway/
-  src/
-    common/             # Shared utilities (logger)
-    connection.ts       # WebSocket connection to Journal service
-    runtime.ts          # MCP + skills runtime (IntegrationProvider) with config hot-reload
-    mcp-client.ts       # MCP server transport wrapper (stdio, SSE, streamable-http)
-    skill-client.ts     # Skill file loader
-    config-watcher.ts   # Config file watcher (fs.watch + debounce)
-    env-file.ts         # .env file loader + watcher (dotenv)
-    config.ts           # Configuration parsing + resolution helpers
-    main.ts             # CLI entry point (.env auto-detection)
-    __tests__/          # All tests
-protocol/
-  src/
-    messages.ts         # Protocol message schemas and types
-    integrations.ts     # Integration, tool, and content schemas
-    skills.ts           # Skill schema
-    errors.ts           # Gateway error schemas
-    provider.ts         # IntegrationProvider and gateway config types
-```
+See `ARCHITECTURE.md`.
 
 ## Key Source Files
 
-### `protocol/src/`
-
-Protocol types defined with Zod schemas:
-- `errors.ts` — `GatewayError`, error code enum (`INTEGRATION_NOT_FOUND`, `TOOL_NOT_FOUND`, `EXECUTION_FAILED`, `TIMEOUT`)
-- `integrations.ts` — `Integration`, `ToolDefinition`, `ToolResult`, `ContentBlock`
-- `messages.ts` — All message types with `z.discriminatedUnion("type", [...])` for `GatewayMessage` and `ServiceMessage`
-- `skills.ts` — `Skill` type (`{ id, content }`)
-- `provider.ts` — `IntegrationProvider` interface, `GatewayConfig`, `IntegrationNotFoundError`
-- `index.ts` — Re-exports everything
-
-### `gateway/src/`
-
-- `connection.ts` — WebSocket connection to Journal service with reconnection
-- `common/logger.ts` — Structured JSON logger
-- `version.ts` — Package version loader
-- `config.ts` — `McpServerConfig` interface, `parseConfig`, `readConfigFile`, `resolveConfigFile`, `resolveConfigFilePath` with Zod validation
-- `config-watcher.ts` — Watches config file with `fs.watch` + 500ms debounce, emits `config_changed`
-- `env-file.ts` — Loads and watches `.env` files using `dotenv.parse()`, emits `env_changed`
-- `mcp-client.ts` — Starts or connects to MCP servers via `@modelcontextprotocol/sdk` transports
-- `runtime.ts` — `Runtime` implements `IntegrationProvider` (manages MCP clients + skills), supports hot-reload of config and env files
-- `skill-client.ts` — Loads raw Markdown files as skills
-- `main.ts` — CLI entry point with `.env` auto-detection (`--env-file`, `JOURNAL_GATEWAY_ENV_FILE`, or `.env` in cwd)
+See `ARCHITECTURE.md` for the current module list. For protocol message work,
+start with `protocol/src/messages.ts`, `protocol/src/index.ts`,
+`spec/protocol.md`, and `gateway/src/__tests__/messages.test.ts`.
 
 ## Testing Patterns
 
@@ -75,6 +45,10 @@ pnpm test
 cd gateway && pnpm test
 ```
 
+`pnpm test` is the gateway test suite, not every test in the repo. Use
+`pnpm test:all` for the root-script suites and `testing/e2e/run-all.sh` for the
+Docker database end-to-end tests.
+
 ### Mocking conventions
 
 - **MCP SDK:** Use `vi.mock("@modelcontextprotocol/sdk/client/index.js")` and `vi.mock("@modelcontextprotocol/sdk/client/stdio.js")` to mock the MCP client and transport
@@ -83,7 +57,8 @@ cd gateway && pnpm test
 
 ### Process event testing
 
-The gateway uses `EventEmitter` patterns for process lifecycle. Tests verify events like connection state changes, integration registration, and tool call handling.
+The gateway uses `EventEmitter` patterns for process lifecycle. Tests verify
+events like connection state changes, catalog updates, and tool call handling.
 
 ## Code Conventions
 

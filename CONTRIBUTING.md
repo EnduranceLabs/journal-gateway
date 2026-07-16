@@ -23,14 +23,17 @@ pnpm test
 # Run TypeScript client tests
 pnpm test:client
 
-# Run integration tests (requires gateway to be built)
+# Run TypeScript integration tests (requires gateway to be built)
 pnpm test:integration
 
 # Run Python client tests (creates the venv on first run; set PYTHON=/path/to/python3.11 if needed)
 pnpm test:python
 
-# Run every test suite
+# Run every root-script suite above
 pnpm test:all
+
+# Run Docker database end-to-end tests (requires Docker; not part of pnpm test:all)
+testing/e2e/run-all.sh
 ```
 
 If your default `python3` is older than 3.11, prefix Python-dependent commands
@@ -39,39 +42,19 @@ with `PYTHON=/path/to/python3.11`, for example
 
 ## Architecture
 
-```
-protocol/                   # journal-gateway-protocol (shared Zod schemas + TS types)
-gateway/                    # Gateway process (connects outbound to service)
-  src/
-    common/                 # Shared utilities (logger)
-    connection.ts           # WebSocket connection (single async reconnect loop, defensive handler)
-    runtime.ts              # MCP + skills runtime (IntegrationProvider, sync getTools) with config hot-reload
-    mcp-client.ts           # MCP server transport wrapper (stdio, SSE, streamable-http) with cache-first tools
-    skill-client.ts         # Skill file loader + fs.watch change detection
-    config-watcher.ts       # Config file watcher (fs.watch + debounce)
-    env-file.ts             # .env file loader + watcher (dotenv)
-    version-hash.ts         # Content-hash versioning for change detection
-    config.ts               # Configuration parsing + resolution helpers
-    main.ts                 # CLI entry point (.env auto-detection)
-clients/
-  typescript/               # journal-gateway-client npm package
-  python/                   # journal-gateway-client PyPI package
-testing/
-  integration/              # End-to-end tests (real gateway <-> client library)
-examples/                   # Sample gateway.json + minimal TS/Python client servers
-spec/
-  protocol.md               # WebSocket protocol specification
-  gateway-config.schema.json # JSON Schema for the gateway config file
-packaging/
-  bump-version.sh           # Lockstep version bump across all four packages
-  npm/ pypi/ homebrew/ docker/ # Per-target publish scripts + release runbook
-```
+The gateway connects outbound to the Journal service over WebSocket. It manages
+MCP server connections (`stdio`, `sse`, or `streamable-http`) and skill files,
+routing tool calls from the service to the appropriate MCP server.
 
-The gateway connects outbound to the Journal service over WebSocket. It manages MCP server connections (stdio subprocesses, SSE, or streamable-http) and skill files, routing tool calls from the service to the appropriate MCP server.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the module-by-module structure.
 
 ## Client Libraries
 
 Agents that want to accept gateway connections and call tools through them can use the client libraries. They implement the **service side** of the protocol: run a WebSocket server, authenticate gateways, pull tools and skills, and provide a `callTool()` API.
+
+The examples below print from application callbacks. The client libraries
+themselves must not write to stdout/stderr; diagnostics are surfaced through
+callbacks such as `onSocketError` / `on_socket_error`.
 
 ```
 +-------------+        +------------------+        +-----------+
@@ -93,7 +76,7 @@ const server = new GatewayServer({
 
 await server.start();
 
-// Once a gateway connects and registers:
+// Once a gateway connects and its initial catalog is pulled:
 const result = await server.callTool("postgresql", "execute_sql", { sql: "SELECT 1" });
 console.log(result.content);
 
@@ -113,7 +96,7 @@ async def validate(token):
 server = GatewayServer(validate_token=validate, port=8080)
 await server.start()
 
-# Once a gateway connects:
+# Once a gateway connects and its initial catalog is pulled:
 result = await server.call_tool("postgresql", "execute_sql", {"sql": "SELECT 1"})
 print(result.content)
 

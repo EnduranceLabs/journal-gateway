@@ -7,10 +7,9 @@ databases — no mocks:
 client library (service side)  <—ws—>  journal-gateway  <—stdio—>  Toolbox MCP server  <—>  Postgres / MySQL (Docker)
 ```
 
-They validate the database integration examples added under
-[`examples/integrations/`](../../examples/integrations) and the
-legacy Postgres reference-server to `@toolbox-sdk/server` migration in the docs,
-plus the gateway's config hot-reload.
+They validate the database integration examples under
+[`examples/integrations/`](../../examples/integrations) plus the gateway's
+config hot-reload.
 
 ## What is covered
 
@@ -41,7 +40,7 @@ env-var tables are correct.
 ## Run everything
 
 ```bash
-testing/e2e/run-all.sh            # brings up DBs, runs all tests, leaves DBs up
+testing/e2e/run-all.sh            # brings up DBs, runs all e2e tests, leaves DBs up
 KEEP_UP=0 testing/e2e/run-all.sh  # ...and tears the DBs down at the end
 ```
 

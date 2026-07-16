@@ -20,7 +20,7 @@ is a standalone package.
 
 | To understand… | Read |
 |----------------|------|
-| The architecture, module by module | [CLAUDE.md](./CLAUDE.md) |
+| The architecture, module by module | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | The wire protocol (messages, flow, timeouts) | [spec/protocol.md](./spec/protocol.md) |
 | The gateway config file and its JSON Schema | [README.md](./README.md), [spec/gateway-config.schema.json](./spec/gateway-config.schema.json) |
 | How to run the whole thing end to end | [examples/](./examples) |
@@ -36,9 +36,10 @@ pnpm build            # build the gateway
 pnpm typecheck
 pnpm test             # gateway tests
 pnpm test:client      # TypeScript client tests
-pnpm test:integration # end-to-end (gateway <-> client)
+pnpm test:integration # TypeScript integration (gateway <-> TS client)
 pnpm test:python      # Python client tests (creates the venv on first run)
-pnpm test:all         # everything above
+pnpm test:all         # root-script suites above
+testing/e2e/run-all.sh # Docker database end-to-end tests (requires Docker)
 ```
 
 If your default `python3` is older than 3.11, prefix Python-dependent commands
@@ -46,6 +47,7 @@ with `PYTHON=/path/to/python3.11`, for example
 `PYTHON=/opt/homebrew/bin/python3.12 pnpm test:all`.
 
 Run `pnpm -r build` (or at least `pnpm -r typecheck`) before opening a PR.
+The Docker database end-to-end tests are separate from `pnpm test:all`.
 
 ## Conventions that are easy to get wrong
 

@@ -1,6 +1,8 @@
 # Journal Gateway
 
-Connect your data sources to [Journal](https://journal.one). The gateway runs inside your network and connects outbound to Journal — your credentials never leave your infrastructure and you don't need to open any inbound ports.
+Connect your data sources to [Journal](https://journal.one). The gateway runs
+inside your network and connects outbound to Journal. Credentials stay in your
+infrastructure, and no inbound ports are required.
 
 ## How It Works
 
@@ -31,8 +33,8 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
 
 ### Docker
 
-Try it (foreground). Put `JOURNAL_GATEWAY_TOKEN=gw_your_token` in a `.env` file next to
-your `gateway.json`:
+To run a foreground container for local validation, create a `.env` file next
+to `gateway.json` that contains `JOURNAL_GATEWAY_TOKEN=gw_your_token`, then run:
 
 ```bash
 docker run --rm \
@@ -41,7 +43,7 @@ docker run --rm \
   ghcr.io/endurancelabs/journal-gateway:latest --config /etc/journal/gateway.json
 ```
 
-Run it as a service (detached, restarts on reboot/crash):
+For a long-lived container, mount a persistent config file and env file:
 
 ```bash
 docker run -d --name journal-gateway --restart unless-stopped \
@@ -50,11 +52,12 @@ docker run -d --name journal-gateway --restart unless-stopped \
   ghcr.io/endurancelabs/journal-gateway:latest --config /etc/journal/gateway.json
 ```
 
-The image's `ENTRYPOINT` is the gateway, so flags (`--config`, `--env-file`, `--version`)
-go straight after the image name. Pass secrets with `--env-file` or `-e`; the token never
-needs to be baked into the image. Config hot-reload over a bind mount is reliable on Linux
-hosts but not on Docker Desktop (macOS/Windows) — restart the container after config edits
-there.
+The image `ENTRYPOINT` is the gateway binary. Pass gateway flags such as
+`--config`, `--env-file`, and `--version` after the image name. Provide secrets
+with `--env-file` or `-e`; tokens and integration credentials should not be
+included in the image. Config hot-reload over a bind mount is reliable on Linux
+hosts. On Docker Desktop for macOS or Windows, restart the container after
+editing the config file.
 
 ### Example config file (`gateway.json`)
 
@@ -92,9 +95,10 @@ MCP server packages in examples are external runtime commands. They are resolved
 by `npx` when the gateway starts and are not bundled with, or installed by,
 `journal-gateway`.
 
-Set every environment variable referenced by `envVars` or `headers` before
-starting the gateway. For the config above, that means `POSTGRES_*` and
-`REMOTE_MCP_AUTHORIZATION` in addition to `JOURNAL_GATEWAY_TOKEN`.
+Set every host environment variable referenced by an `envVars` key or a
+`headers` value before starting the gateway. For the config above, that means
+`POSTGRES_*` and `REMOTE_MCP_AUTHORIZATION` in addition to
+`JOURNAL_GATEWAY_TOKEN`.
 
 Runnable examples (this config plus minimal TS and Python client servers) live in
 [`examples/`](./examples). Database and enterprise integration examples live in
@@ -130,16 +134,20 @@ The config file describes what the gateway offers. Point to it with either:
 1. **`--config /path/to/gateway.json`** — CLI argument (highest precedence)
 2. **`JOURNAL_GATEWAY_CONFIG`** — env var containing a file path or inline JSON
 
-Both `mcpServers` and `skillsDir` are optional. An empty `{}` is valid — the gateway will connect but won't have anything to offer.
+Both `mcpServers` and `skillsDir` are optional. An empty `{}` is valid; the
+gateway will connect without exposing tools or skills.
 
-You can also use `--env-file /path/to/.env` to load environment variables from a `.env` file. If neither `--env-file` nor `JOURNAL_GATEWAY_ENV_FILE` is set, the gateway auto-detects a `.env` file in the current directory. Values from `.env` fill in gaps — real environment variables always take precedence.
+Use `--env-file /path/to/.env` to load environment variables from a `.env`
+file. If neither `--env-file` nor `JOURNAL_GATEWAY_ENV_FILE` is set, the
+gateway auto-detects a `.env` file in the current directory. Values from `.env`
+are used only when the variable is not already set in the process environment.
 
 #### Config file schema
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `mcpServers` | array | `[]` | MCP server definitions (see below) |
-| `skillsDir` | string | `null` | Path to directory containing skill Markdown files |
+| `skillsDir` | `string \| null` | `null` | Path to directory containing skill Markdown files |
 
 #### MCP servers
 
@@ -154,7 +162,7 @@ Each entry in `mcpServers` has a `transport` field that determines the connectio
 | `id` | yes | Unique name for this server |
 | `transport` | no | `"stdio"` (default), `"sse"`, or `"streamable-http"` |
 | `name` | no | Display name (defaults to `id`) |
-| `description` | no | What this server does |
+| `description` | no | Server description |
 
 **`stdio` — local subprocess (default):**
 
@@ -162,21 +170,21 @@ Each entry in `mcpServers` has a `transport` field that determines the connectio
 |-------|----------|-------------|
 | `command` | yes | Command to run (e.g. `npx`, `python`) |
 | `args` | no | Command-line arguments |
-| `envVars` | no | Map of env var names to resolve from the host environment and pass to the subprocess |
+| `envVars` | no | Map of `{ hostEnvVar: subprocessEnvVar }` resolved before starting the subprocess |
 
 **`sse` — SSE client (legacy remote servers):**
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `url` | yes | SSE endpoint URL |
-| `headers` | no | Map of `{ headerName: envVarName }` — values resolved from host environment |
+| `headers` | no | Map of `{ headerName: hostEnvVar }` — values resolved from host environment |
 
 **`streamable-http` — Streamable HTTP client (recommended for remote servers):**
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `url` | yes | HTTP endpoint URL |
-| `headers` | no | Map of `{ headerName: envVarName }` — values resolved from host environment |
+| `headers` | no | Map of `{ headerName: hostEnvVar }` — values resolved from host environment |
 
 #### Skills
 
@@ -196,9 +204,14 @@ Tools and skills can change while the gateway is running. An MCP server might re
 
 The gateway also watches the config file and `.env` file for changes. When you add, remove, or modify an MCP server in the config file, the gateway automatically starts, stops, or restarts the affected servers — no gateway restart required. Similarly, when an environment variable in the `.env` file changes, any MCP servers that depend on it are automatically restarted. Note that `skillsDir` changes are not hot-reloaded and require a gateway restart.
 
-Version hashes (`mcpVersion` and `skillsVersion`) are content-based (SHA-256, 16 hex chars). Same content produces the same hash across restarts — the service can tell at a glance whether anything actually changed.
+Version hashes (`mcpVersion` and `skillsVersion`) are content-based (SHA-256,
+16 hex chars). The same content produces the same hash across restarts, so the
+service can distinguish real catalog changes from gateway restarts.
 
-An MCP server that fails to start (bad command, unreachable URL) is logged and skipped — the gateway still connects and serves its healthy servers and skills, so one misconfigured server never takes down the whole gateway.
+An MCP server that fails to start, for example because of an invalid command or
+unreachable URL, is logged and skipped. The gateway still connects and serves
+healthy servers and skills, so one misconfigured server does not make the
+gateway unavailable.
 
 ### What clients should do
 

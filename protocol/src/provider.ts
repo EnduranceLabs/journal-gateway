@@ -19,7 +19,7 @@ export interface IntegrationProvider {
 
 export class IntegrationNotFoundError extends Error {
   constructor(integrationId: string, detail?: string) {
-    super(detail ?? `Integration "${integrationId}" is not registered`);
+    super(detail ?? `Integration "${integrationId}" is not known to the gateway`);
     this.name = "IntegrationNotFoundError";
   }
 }

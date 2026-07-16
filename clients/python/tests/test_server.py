@@ -449,7 +449,7 @@ async def test_pong_timeout_disconnects_gateway():
         "skillsVersion": None,
     }))
 
-    # Wait for the gateway to be registered
+    # Wait for the gateway to be connected
     await asyncio.sleep(0.1)
     assert len(srv.connected_gateways) == 1
 
