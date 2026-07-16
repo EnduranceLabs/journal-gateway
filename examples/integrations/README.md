@@ -37,7 +37,8 @@ with the least-privilege credentials or toolsets your use case actually needs.
 ## Adapting Configs
 
 For local MCP servers, use `transport: "stdio"` or omit `transport` and provide
-`command`, `args`, and `envVars`. In gateway configs, `envVars` maps:
+`command`, `args`, and `envVars`. In gateway configs, `envVars` maps host
+environment variable names to subprocess environment variable names:
 
 ```json
 { "HOST_ENV_VAR": "MCP_SERVER_ENV_VAR" }

@@ -76,6 +76,8 @@ own logger, metrics, and tracing stack.
   tool for one organization, with candidate gateway selection and retry on
   connection-level failure.
 - `getToolsForOrg(orgId)`: list deduplicated tools for an organization.
+- `getVersions(gatewayId)`, `getTools(gatewayId)`, `getSkills(gatewayId)`:
+  explicitly pull catalog data from a specific gateway.
 - `connectedGateways`: inspect currently connected gateways.
 
 ## Callbacks

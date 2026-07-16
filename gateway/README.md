@@ -81,8 +81,10 @@ Each entry in `mcpServers` describes one integration. Supported transports:
 - `streamable-http`: connects to a remote MCP server using the current MCP HTTP
   transport.
 
-Use `envVars` to map environment variables from the gateway process into the MCP
-server. Do not put credentials directly in `gateway.json`.
+Use `envVars` to map host environment variables into the MCP server subprocess:
+`{ "HOST_ENV_VAR": "MCP_SERVER_ENV_VAR" }`. Use `headers` to map remote MCP
+headers to host environment variables: `{ "Authorization": "TOKEN_ENV_VAR" }`.
+Do not put credentials directly in `gateway.json`.
 
 For database integrations, create a read-only or restricted database role before
 connecting an MCP server. See the database guide for PostgreSQL, MySQL, SQL

@@ -93,12 +93,24 @@ it("rejects my_new with missing field1", () => {
 });
 ```
 
-## 6. Run checks
+## 6. Keep clients and docs in sync
+
+- TypeScript clients re-export protocol types from `clients/typescript/src/types.ts`.
+  Add the new schema/type there if it should be public from the client package.
+- Python clients define their own dataclasses and message handling in
+  `clients/python/journal_gateway_client/`. Update them when the message changes
+  runtime behavior or public data shapes.
+- If the message changes lifecycle, timeout, retry, trace, or catalog behavior,
+  update `README.md`, `ARCHITECTURE.md`, and the relevant client README files.
+
+## 7. Run checks
 
 ```bash
-pnpm build         # Build the gateway
-pnpm test          # Run all tests
-pnpm typecheck     # Verify types compile
+pnpm -r build         # Build workspace TypeScript packages
+pnpm test             # Gateway tests
+pnpm test:client      # TypeScript client tests
+pnpm test:integration # TypeScript integration (gateway <-> TS client)
+pnpm test:python      # Python client tests
 ```
 
 ## Key files
@@ -106,4 +118,6 @@ pnpm typecheck     # Verify types compile
 - `spec/protocol.md` — Protocol specification
 - `protocol/src/messages.ts` — Zod schemas and discriminated unions
 - `protocol/src/index.ts` — Re-exports
+- `clients/typescript/src/types.ts` — Client package re-exports
+- `clients/python/journal_gateway_client/` — Python client types and handlers
 - `gateway/src/__tests__/messages.test.ts` — Message parsing tests
