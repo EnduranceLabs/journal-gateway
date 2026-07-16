@@ -32,6 +32,7 @@
   "publishConfig": { "access": "public" },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {

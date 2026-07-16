@@ -56,6 +56,7 @@ export type RuntimeConfig = GatewayConfig & {
   mcpServers: McpServerConfig[];
   mcpEnvVars: Map<string, Record<string, string>>;
   skillsDir: string | null;
+  warnings: string[];
 };
 
 const WS_SCHEMES = new Set(["ws:", "wss:", "http:", "https:"]);
@@ -240,13 +241,20 @@ export function parseConfig(
     configFile = GatewayConfigFileSchema.parse({});
   }
 
-  if (configFile.mcpServers.length === 0 && !configFile.skillsDir) {
-    console.warn(
-      "Warning: no mcpServers or skillsDir configured. The gateway will connect but have no tools or skills to offer."
-    );
-  }
+  const warnings =
+    configFile.mcpServers.length === 0 && !configFile.skillsDir
+      ? [
+          "No mcpServers or skillsDir configured; the gateway will connect without tools or skills.",
+        ]
+      : [];
 
   const { mcpServers, mcpEnvVars } = resolveConfigFile(configFile, env);
 
-  return { ...base, mcpServers, mcpEnvVars, skillsDir: configFile.skillsDir };
+  return {
+    ...base,
+    mcpServers,
+    mcpEnvVars,
+    skillsDir: configFile.skillsDir,
+    warnings,
+  };
 }

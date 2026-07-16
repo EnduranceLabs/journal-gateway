@@ -1,6 +1,7 @@
 import { watch, type FSWatcher } from "node:fs";
 import { EventEmitter } from "node:events";
 import { readConfigFile, type GatewayConfigFile } from "./config.js";
+import type { Logger } from "./common/logger.js";
 
 export interface ConfigWatcherEvents {
   config_changed: [config: GatewayConfigFile];
@@ -10,7 +11,10 @@ export class ConfigWatcher extends EventEmitter<ConfigWatcherEvents> {
   private watcher: FSWatcher | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private filePath: string | null) {
+  constructor(
+    private filePath: string | null,
+    private logger?: Pick<Logger, "warn">
+  ) {
     super();
   }
 
@@ -44,9 +48,9 @@ export class ConfigWatcher extends EventEmitter<ConfigWatcherEvents> {
     try {
       configFile = readConfigFile(this.filePath);
     } catch (err) {
-      console.warn(
-        `Config file reload failed (keeping current config): ${err instanceof Error ? err.message : String(err)}`
-      );
+      this.logger?.warn("Config file reload failed, keeping current config", {
+        error: err instanceof Error ? err.message : String(err),
+      });
       return;
     }
 

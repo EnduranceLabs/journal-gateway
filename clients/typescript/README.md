@@ -88,7 +88,7 @@ own logger, metrics, and tracing stack.
 - `onGatewayDisconnected(gateway, closeCode?, closeReason?)`: fired after a
   connected gateway disconnects.
 - `onSocketError(error, gateway | null)`: optional constructor callback for
-  socket-level errors such as connection resets.
+  socket-level errors and unexpected connection-handler failures.
 
 ## Trace Propagation
 
@@ -108,7 +108,7 @@ const server = new GatewayServer({
       : null;
   },
   onSocketError: (error, gateway) => {
-    logger.error({ error, gatewayId: gateway?.id }, "gateway socket error");
+    logger.error({ error, gatewayId: gateway?.id }, "gateway connection error");
   },
 });
 ```

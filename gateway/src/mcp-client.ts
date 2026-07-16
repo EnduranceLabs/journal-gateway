@@ -35,7 +35,7 @@ export class McpClient extends EventEmitter<McpClientEvents> {
         return new StdioClientTransport({
           command: this.definition.command,
           args: this.definition.args,
-          env: { ...process.env, ...this.env } as Record<string, string>,
+          env: this.env,
         });
 
       case "sse":

@@ -96,6 +96,33 @@ describe("McpClient", () => {
     expect(client.isRunning()).toBe(true);
   });
 
+  it("passes only resolved env vars to stdio transport", async () => {
+    const { StdioClientTransport } = await import(
+      "@modelcontextprotocol/sdk/client/stdio.js"
+    );
+    const originalToken = process.env.JOURNAL_GATEWAY_TOKEN;
+    process.env.JOURNAL_GATEWAY_TOKEN = "gw_should_not_leak";
+
+    try {
+      const client = new McpClient(
+        testDefinition,
+        { DATABASE_URL: "postgres://localhost/test" },
+        logger
+      );
+      await client.start();
+
+      const params = vi.mocked(StdioClientTransport).mock.calls[0][0];
+      expect(params.env).toEqual({ DATABASE_URL: "postgres://localhost/test" });
+      expect(params.env).not.toHaveProperty("JOURNAL_GATEWAY_TOKEN");
+    } finally {
+      if (originalToken === undefined) {
+        delete process.env.JOURNAL_GATEWAY_TOKEN;
+      } else {
+        process.env.JOURNAL_GATEWAY_TOKEN = originalToken;
+      }
+    }
+  });
+
   it("getTools returns empty before start", () => {
     const client = new McpClient(testDefinition, {}, logger);
     expect(client.getTools()).toEqual([]);

@@ -22,6 +22,7 @@ from .types import (
 )
 
 logger = logging.getLogger("journal_gateway_client")
+logger.addHandler(logging.NullHandler())
 
 
 @dataclass
@@ -155,6 +156,20 @@ class GatewayServer:
         self.on_gateway_connected: Callable[[ConnectedGateway], None] | None = None
         self.on_gateway_updated: Callable[[ConnectedGateway], None] | None = None
         self.on_gateway_disconnected: Callable[[ConnectedGateway], None] | None = None
+
+    def _report_socket_error(
+        self, error: Exception, gateway: ConnectedGateway | None
+    ) -> None:
+        if not self._on_socket_error:
+            logger.error(
+                "Gateway connection error",
+                exc_info=(type(error), error, error.__traceback__),
+            )
+            return
+        try:
+            self._on_socket_error(error, gateway)
+        except Exception:
+            pass
 
     @property
     def port(self) -> int:
@@ -314,11 +329,22 @@ class GatewayServer:
         self._next_id += 1
         conn_id = f"gw_{self._next_id}"
         gw_conn: _GatewayConn | None = None
+        background_tasks: set[asyncio.Task[None]] = set()
+
+        def start_background(coro: Awaitable[None]) -> asyncio.Task[None]:
+            task = asyncio.create_task(coro)
+            background_tasks.add(task)
+            task.add_done_callback(background_tasks.discard)
+            return task
 
         try:
             # Phase 1: Authentication (10s timeout)
             raw = await asyncio.wait_for(ws.recv(), timeout=10.0)
-            msg = json.loads(raw)
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                await ws.close()
+                return
 
             if msg.get("type") != "authenticate":
                 await ws.close()
@@ -346,7 +372,11 @@ class GatewayServer:
 
             # Phase 2: Wait for version_changed (30s timeout)
             raw = await asyncio.wait_for(ws.recv(), timeout=30.0)
-            msg = json.loads(raw)
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                await ws.close()
+                return
 
             if msg.get("type") != "version_changed":
                 await ws.close()
@@ -372,17 +402,15 @@ class GatewayServer:
             ping_task = None
             if self._ping_interval > 0:
                 ping_task = asyncio.create_task(self._ping_loop(ws, conn_id))
-
-            async def do_initial_pull():
-                await self._auto_pull(gw_conn)
-                if self.on_gateway_connected:
-                    self.on_gateway_connected(info)
-
-            pull_task = asyncio.create_task(do_initial_pull())
+            start_background(self._run_initial_pull(gw_conn))
 
             try:
                 async for raw in ws:
-                    msg = json.loads(raw)
+                    try:
+                        msg = json.loads(raw)
+                    except json.JSONDecodeError:
+                        await ws.close()
+                        break
                     msg_type = msg.get("type")
 
                     if msg_type == "tool_result":
@@ -404,26 +432,13 @@ class GatewayServer:
                         gw_conn.info.mcp_version = new_mcp
                         gw_conn.info.skills_version = new_skills
 
-                        # Spawn pull as background task to avoid deadlock
-                        # (pull awaits futures resolved by this message loop)
-                        async def handle_version_update(mc=mcp_changed, sc=skills_changed,
-                                                        nm=new_mcp, ns=new_skills):
-                            if mc and nm is not None:
-                                await self._pull_tools(gw_conn)
-                            elif mc and nm is None:
-                                gw_conn.info.integrations = [
-                                    i for i in gw_conn.info.integrations if i.id == "skills"
-                                ]
-                            if sc and ns is not None:
-                                await self._pull_skills(gw_conn)
-                            elif sc and ns is None:
-                                gw_conn.info.integrations = [
-                                    i for i in gw_conn.info.integrations if i.id != "skills"
-                                ]
-                            if self.on_gateway_updated:
-                                self.on_gateway_updated(gw_conn.info)
-
-                        asyncio.create_task(handle_version_update())
+                        start_background(self._handle_version_update(
+                            gw_conn,
+                            mcp_changed,
+                            skills_changed,
+                            new_mcp,
+                            new_skills,
+                        ))
                     elif msg_type == "versions":
                         gw_conn.resolve_pull(msg["requestId"], {
                             "mcpVersion": msg.get("mcpVersion"),
@@ -444,7 +459,10 @@ class GatewayServer:
                         })
 
             finally:
-                pull_task.cancel()
+                for task in list(background_tasks):
+                    task.cancel()
+                if background_tasks:
+                    await asyncio.gather(*background_tasks, return_exceptions=True)
                 if ping_task:
                     ping_task.cancel()
                     try:
@@ -455,18 +473,58 @@ class GatewayServer:
         except asyncio.TimeoutError:
             pass
         except websockets.exceptions.ConnectionClosed as e:
-            if self._on_socket_error and not isinstance(
+            if not isinstance(
                 e, websockets.exceptions.ConnectionClosedOK
             ):
-                self._on_socket_error(e, gw_conn.info if gw_conn else None)
+                self._report_socket_error(e, gw_conn.info if gw_conn else None)
         except Exception as e:
-            logger.exception("Error handling gateway connection %s", conn_id)
+            self._report_socket_error(e, gw_conn.info if gw_conn else None)
         finally:
             if gw_conn:
                 gw_conn.reject_all("Gateway disconnected")
                 self._gateways.pop(conn_id, None)
                 if self.on_gateway_disconnected:
                     self.on_gateway_disconnected(gw_conn.info)
+
+    async def _run_initial_pull(self, gw_conn: _GatewayConn) -> None:
+        try:
+            await self._auto_pull(gw_conn)
+            if self.on_gateway_connected:
+                self.on_gateway_connected(gw_conn.info)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            self._report_socket_error(e, gw_conn.info)
+            await gw_conn.ws.close()
+
+    async def _handle_version_update(
+        self,
+        gw_conn: _GatewayConn,
+        mcp_changed: bool,
+        skills_changed: bool,
+        new_mcp: str | None,
+        new_skills: str | None,
+    ) -> None:
+        try:
+            if mcp_changed and new_mcp is not None:
+                await self._pull_tools(gw_conn)
+            elif mcp_changed and new_mcp is None:
+                gw_conn.info.integrations = [
+                    i for i in gw_conn.info.integrations if i.id == "skills"
+                ]
+            if skills_changed and new_skills is not None:
+                await self._pull_skills(gw_conn)
+            elif skills_changed and new_skills is None:
+                gw_conn.info.integrations = [
+                    i for i in gw_conn.info.integrations if i.id != "skills"
+                ]
+            if self.on_gateway_updated:
+                self.on_gateway_updated(gw_conn.info)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            self._report_socket_error(e, gw_conn.info)
+            await gw_conn.ws.close()
 
     async def _auto_pull(self, gw_conn: _GatewayConn) -> None:
         """Pull tools and/or skills based on versions."""

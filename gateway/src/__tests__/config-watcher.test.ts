@@ -27,7 +27,8 @@ describe("ConfigWatcher", () => {
       mcpServers: [{ id: "test", transport: "stdio", command: "echo" }],
     });
 
-    const watcher = new ConfigWatcher(configPath);
+    const logger = { warn: vi.fn() };
+    const watcher = new ConfigWatcher(configPath, logger);
     watcher.startWatching();
 
     const changedPromise = new Promise<GatewayConfigFile>((resolve) => {
@@ -49,29 +50,30 @@ describe("ConfigWatcher", () => {
     watcher.stopWatching();
   });
 
-  it("does NOT emit on parse/validation errors, logs warning", async () => {
+  it("does not emit on parse/validation errors, logs warning", async () => {
     await writeConfig({
       mcpServers: [{ id: "test", transport: "stdio", command: "echo" }],
     });
 
-    const watcher = new ConfigWatcher(configPath);
+    const logger = { warn: vi.fn() };
+    const watcher = new ConfigWatcher(configPath, logger);
     watcher.startWatching();
 
     let emitted = false;
     watcher.on("config_changed", () => { emitted = true; });
-
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     // Write invalid JSON
     await writeFile(configPath, "not json {{{");
 
     await new Promise((r) => setTimeout(r, 800));
     expect(emitted).toBe(false);
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Config file reload failed")
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Config file reload failed, keeping current config",
+      expect.objectContaining({
+        error: expect.stringContaining("Config file is not valid JSON"),
+      })
     );
 
-    warnSpy.mockRestore();
     watcher.stopWatching();
   });
 

@@ -33,8 +33,8 @@ JOURNAL_GATEWAY_TOKEN=gw_your_token journal-gateway --config gateway.json
 
 ### Docker
 
-To run a foreground container for local validation, create a `.env` file next
-to `gateway.json` that contains `JOURNAL_GATEWAY_TOKEN=gw_your_token`, then run:
+To validate the Docker image locally, create a `.env` file next to
+`gateway.json` that contains `JOURNAL_GATEWAY_TOKEN=gw_your_token`, then run:
 
 ```bash
 docker run --rm \
@@ -217,7 +217,7 @@ gateway unavailable.
 
 Services using the client libraries (TypeScript or Python) receive `onGatewayConnected` after the initial pull completes (integrations are already populated). When the gateway sends `version_changed`, the client auto-pulls what changed and fires `onGatewayUpdated`.
 
-Services can also explicitly pull at any time using `getVersions()`, `getTools()`, or `getSkills()` on a specific gateway. Both client libraries expose the same optional hooks for observability: `getTraceContext` / `get_trace_context` propagates a W3C trace context onto each tool call, and `onSocketError` / `on_socket_error` surfaces socket-level failures (the libraries never write to the console themselves).
+Services can also explicitly pull at any time using `getVersions()`, `getTools()`, or `getSkills()` on a specific gateway. Both client libraries expose the same optional hooks for observability: `getTraceContext` / `get_trace_context` propagates a W3C trace context onto each tool call, and `onSocketError` / `on_socket_error` surfaces socket-level and unexpected connection-handler failures (the libraries never write to the console themselves).
 
 ## Telemetry & Audit
 

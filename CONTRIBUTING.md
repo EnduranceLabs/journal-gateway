@@ -8,13 +8,13 @@ Prerequisites: Node.js 22+, pnpm, Python 3.11+ (for Python client).
 # Install dependencies
 pnpm install
 
-# Build gateway
+# Build protocol and gateway
 pnpm build
 
 # Build TypeScript client
 pnpm build:client
 
-# Type check
+# Type check protocol, gateway, and TypeScript client
 pnpm typecheck
 
 # Run gateway tests
@@ -23,7 +23,7 @@ pnpm test
 # Run TypeScript client tests
 pnpm test:client
 
-# Run TypeScript integration tests (requires gateway to be built)
+# Run TypeScript integration tests
 pnpm test:integration
 
 # Run Python client tests (creates the venv on first run; set PYTHON=/path/to/python3.11 if needed)
@@ -133,4 +133,4 @@ docker build -f packaging/docker/Dockerfile -t journal-gateway .
 
 ## Pre-PR checklist
 
-- Run `pnpm -r build` (or `pnpm -r typecheck`) to catch cross-package TypeScript/build issues before opening a PR or publishing.
+- Run `pnpm build`, `pnpm build:client`, and `pnpm typecheck` before opening a PR or publishing. Use `pnpm -r build` when you need every TypeScript workspace package built.

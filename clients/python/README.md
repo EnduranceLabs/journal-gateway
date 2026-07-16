@@ -64,7 +64,7 @@ asyncio.run(main())
 
 The library never prints to stdout by itself. Route callbacks into your own
 logger, metrics, and tracing stack. If `on_socket_error` is not provided,
-unexpected socket errors go to the `journal_gateway_client` logger, which is
+unexpected connection errors go to the `journal_gateway_client` logger, which is
 silent by default unless your application configures logging.
 
 ## Key APIs
@@ -94,8 +94,8 @@ Set these attributes on the server instance:
 Constructor callbacks:
 
 - `get_trace_context`: returns W3C trace context for each tool call.
-- `on_socket_error(error, gateway | None)`: receives socket-level failures such
-  as connection resets.
+- `on_socket_error(error, gateway | None)`: receives socket-level failures and
+  unexpected connection-handler failures.
 
 ## Trace Propagation
 
