@@ -8,7 +8,7 @@
     "@journal-labs/bastion": "link:../../.."
   },
   "devDependencies": {
-    "@types/node": "^22",
+    "@types/node": "^26",
     "vitest": "^3.2.7"
   }
 }
